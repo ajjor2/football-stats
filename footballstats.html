@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="fi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pelaajatilastot Ottelusta (Kattavat Tiedot)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .stat-card {
+            transition: transform 0.2s ease-in-out;
+        }
+        .stat-card:hover {
+            transform: translateY(-5px);
+        }
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb { background: #888; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: #555; }
+        .loader {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #3498db;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .additional-info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 0.75rem; /* Tailwind's gap-3 */
+        }
+        .player-image {
+            width: 40px; /* Tailwind w-10 */
+            height: 40px; /* Tailwind h-10 */
+            border-radius: 50%; /* Tailwind rounded-full */
+            object-fit: cover;
+            margin-left: 0.75rem; /* Tailwind ml-3 */
+        }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen flex flex-col items-center p-4 sm:p-8">
+    <div class="container mx-auto bg-white p-6 sm:p-8 rounded-xl shadow-2xl w-full max-w-4xl">
+        <header class="mb-8 text-center">
+            <h1 class="text-3xl sm:text-4xl font-bold text-gray-800">Pelaajatilastot Ottelusta</h1>
+            <p class="text-gray-600 mt-2">Syötä ottelun ID (esim. 3760372) hakeaksesi pelaajien kauden 2025 tilastot.</p>
+        </header>
+
+        <div class="mb-8 flex flex-col sm:flex-row items-center justify-center gap-4">
+            <input type="text" id="matchIdInput" placeholder="Syötä Match ID (esim. 3760372)" class="flex-grow p-3 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-shadow">
+            <button id="fetchDataButton" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg shadow-md hover:shadow-lg transition-all duration-150 ease-in-out w-full sm:w-auto">
+                Hae Tiedot
+            </button>
+        </div>
+
+        <div id="loadingIndicator" class="hidden loader"></div>
+        <div id="errorMessage" class="hidden text-red-600 bg-red-100 p-4 rounded-lg text-center mb-6"></div>
+        
+        <div id="matchInfo" class="mb-8 p-6 bg-gray-50 rounded-lg shadow">
+            </div>
+
+        <div id="playerStatsContainer" class="space-y-6">
+            </div>
+    </div>
+
+    <footer class="mt-12 text-center text-gray-500 text-sm">
+        <p>&copy; 2025 Pelaajatilastot Sovellus. Data by Suomen Palloliiton tulospalvelu.</p>
+    </footer>
+
+    <script>
+        const matchIdInput = document.getElementById('matchIdInput');
+        const fetchDataButton = document.getElementById('fetchDataButton');
+        const playerStatsContainer = document.getElementById('playerStatsContainer');
+        const matchInfoContainer = document.getElementById('matchInfo');
+        const loadingIndicator = document.getElementById('loadingIndicator');
+        const errorMessageContainer = document.getElementById('errorMessage');
+
+        const API_BASE_URL = 'https://spl.torneopal.net/taso/rest/';
+        const CURRENT_YEAR = "2025"; 
+
+        const API_HEADERS = {
+            'Accept': 'json/df8e84j9xtdz269euy3h'
+        };
+
+        fetchDataButton.addEventListener('click', async () => {
+            const matchId = matchIdInput.value.trim();
+            if (!matchId) {
+                displayError("Syötä ottelun ID.");
+                return;
+            }
+
+            clearPreviousData();
+            showLoading(true);
+            displayError(""); 
+
+            try {
+                const matchResponse = await fetch(`${API_BASE_URL}getMatch?match_id=${matchId}`, { headers: API_HEADERS });
+                
+                if (!matchResponse.ok) {
+                    let errorText = `Ottelun ${matchId} hakeminen epäonnistui. Status: ${matchResponse.status}`;
+                     try { const errorData = await matchResponse.json(); if (errorData && (errorData.error || errorData.message)) { errorText += ` - ${errorData.error?.message || errorData.message}`; }} catch (e) {}
+                    throw new Error(errorText);
+                }
+                const matchData = await matchResponse.json();
+
+                if (matchData.call && matchData.call.status !== "ok" && matchData.call.status !== "OK") {
+                     throw new Error(`API-virhe ottelua ${matchId} haettaessa: ${matchData.call.status}`);
+                }
+                if (!matchData.match) {
+                    throw new Error(`Ottelua ${matchId} ei löytynyt tai data on virheellistä.`);
+                }
+
+                displayMatchInfo(matchData.match);
+
+                const playersInMatch = matchData.match.lineups;
+                if (!playersInMatch || playersInMatch.length === 0) {
+                    playerStatsContainer.innerHTML = '<p class="text-gray-700 text-center">Ottelulle ei löytynyt pelaajatietoja.</p>';
+                    showLoading(false);
+                    return;
+                }
+                
+                const playerPromises = playersInMatch.map(playerLineupInfo => 
+                    fetchAndProcessPlayerData(playerLineupInfo.player_id, playerLineupInfo.team_id, matchData.match, playerLineupInfo)
+                );
+                
+                const allPlayerStats = await Promise.all(playerPromises);
+                let validPlayerStats = allPlayerStats.filter(stats => stats !== null);
+                
+                const teamAId = matchData.match.team_A_id;
+                const teamBId = matchData.match.team_B_id;
+
+                validPlayerStats.sort((a, b) => {
+                    const getTeamSortOrder = (teamId) => {
+                        if (teamId === teamAId) return 1;
+                        if (teamId === teamBId) return 2;
+                        return 3; 
+                    };
+
+                    const teamOrderA = getTeamSortOrder(a.teamIdInMatch);
+                    const teamOrderB = getTeamSortOrder(b.teamIdInMatch);
+
+                    if (teamOrderA !== teamOrderB) {
+                        return teamOrderA - teamOrderB;
+                    }
+                    
+                    const numA = parseInt(a.shirtNumber);
+                    const numB = parseInt(b.shirtNumber);
+                    if (!isNaN(numA) && !isNaN(numB)) {
+                        if (numA !== numB) return numA - numB;
+                    } else if (!isNaN(numA)) { return -1; }
+                    else if (!isNaN(numB)) { return 1; }
+                    return a.name.localeCompare(b.name);
+                });
+                
+                if (validPlayerStats.length === 0 && playersInMatch.length > 0) {
+                     playerStatsContainer.innerHTML = '<p class="text-gray-700 text-center">Pelaajien tilastojen haku epäonnistui kaikille pelaajille.</p>';
+                } else {
+                    let currentTeamIdDisplayed = null;
+                    const teamAName = matchData.match.team_A_name || 'Kotijoukkue';
+                    const teamBName = matchData.match.team_B_name || 'Vierasjoukkue';
+
+                    validPlayerStats.forEach(playerFullStats => {
+                        if (playerFullStats.teamIdInMatch !== currentTeamIdDisplayed) {
+                            currentTeamIdDisplayed = playerFullStats.teamIdInMatch;
+                            const teamHeader = document.createElement('h2');
+                            teamHeader.className = 'text-2xl font-semibold text-gray-700 mt-8 mb-4 pt-4 border-t border-gray-200';
+                            
+                            if (currentTeamIdDisplayed === teamAId) {
+                                teamHeader.textContent = teamAName;
+                            } else if (currentTeamIdDisplayed === teamBId) {
+                                teamHeader.textContent = teamBName;
+                            } else {
+                                teamHeader.textContent = `Joukkue ID: ${currentTeamIdDisplayed}`; 
+                            }
+                            playerStatsContainer.appendChild(teamHeader);
+                        }
+                        displayPlayerStats(playerFullStats);
+                    });
+                }
+
+            } catch (error) {
+                console.error("Virhe:", error);
+                if (error.message.toLowerCase().includes("failed to fetch")) {
+                    displayError("Tietojen haku epäonnistui. Tämä voi johtua selaimen tietoturvarajoituksista (CORS), verkko-ongelmasta, tai siitä että API-palvelin esti pyynnön (esim. Cloudflare). Tarkista selaimen konsoli (F12) lisätietoja varten.");
+                } else {
+                    displayError(`Tapahtui virhe: ${error.message}`);
+                }
+            } finally {
+                showLoading(false);
+            }
+        });
+
+        function clearPreviousData() { 
+            matchInfoContainer.innerHTML = '';
+            playerStatsContainer.innerHTML = '';
+            errorMessageContainer.textContent = '';
+            errorMessageContainer.classList.add('hidden');
+        }
+        function showLoading(isLoading) { 
+            loadingIndicator.classList.toggle('hidden', !isLoading);
+        }
+        function displayError(message) { 
+            errorMessageContainer.textContent = message;
+            errorMessageContainer.classList.toggle('hidden', !message);
+        }
+        function displayMatchInfo(match) { 
+            const teamAName = match.team_A_name || 'Kotijoukkue';
+            const teamBName = match.team_B_name || 'Vierasjoukkue';
+            const scoreA = match.fs_A !== undefined ? match.fs_A : '-';
+            const scoreB = match.fs_B !== undefined ? match.fs_B : '-';
+            matchInfoContainer.innerHTML = `
+                <h2 class="text-2xl font-semibold text-gray-700 mb-3 text-center">${teamAName} vs ${teamBName}</h2>
+                <p class="text-xl text-gray-600 text-center mb-1">Tulos: ${scoreA} - ${scoreB}</p>
+                <p class="text-sm text-gray-500 text-center">Päivämäärä: ${match.date || 'N/A'}</p>
+                <p class="text-sm text-gray-500 text-center">Sarja: ${match.category_name || 'N/A'}</p>
+            `;
+        }
+        
+        async function fetchAndProcessPlayerData(playerId, teamIdInMatch, fullMatchData, playerLineupInfoFromMatch) {
+            const defaultPlayerInfo = {
+                name: playerLineupInfoFromMatch.player_name || `Pelaaja ${playerId}`,
+                shirtNumber: playerLineupInfoFromMatch.shirt_number || 'N/A',
+                birthYear: 'N/A',
+                teamsThisYear: 'Ei voitu hakea',
+                gamesPlayedThisYear: 0, 
+                goalsThisYear: 0,
+                goalsByTeamThisYear: {},
+                warningsThisYear: 'N/A',
+                suspensionsThisYear: 'N/A',
+                position_fi: null, nationality: null, img_url: null, height: null, weight: null, 
+                finland_raised: null, isCaptainInMatch: false,
+                added: null, removed: null, dual_representation: null, dual_1_representation: null,
+                dual_2_representation: null, overage: null, parallel_representation: null, exception_representation: null,
+                teamIdInMatch: teamIdInMatch,
+                clubCrest: teamIdInMatch === fullMatchData.team_A_id ? fullMatchData.club_A_crest : fullMatchData.club_B_crest
+            };
+
+            if (!playerId || playerId.toString().startsWith("oma_maali")) { 
+                console.warn(`Player ID puuttuu tai on "oma maali" (${playerId}), ohitetaan pelaaja.`);
+                return null; 
+            }
+            try {
+                const playerResponse = await fetch(`${API_BASE_URL}getPlayer?player_id=${playerId.toString()}`, { headers: API_HEADERS });
+
+                if (!playerResponse.ok) { 
+                    console.error(`Pelaajan ${playerId} hakeminen epäonnistui. Status: ${playerResponse.status}`);
+                    return defaultPlayerInfo;
+                }
+                const playerData = await playerResponse.json();
+
+                if (playerData.call && playerData.call.status !== "ok" && playerData.call.status !== "OK"){ 
+                     console.error(`API-virhe pelaajaa ${playerId} haettaessa: ${playerData.call.status}`);
+                     return {...defaultPlayerInfo, birthYear: playerData.player ? playerData.player.birthyear || 'N/A' : 'N/A', teamsThisYear: 'API-virhe'};
+                }
+                if (!playerData.player) { 
+                    console.error(`Pelaajaa ${playerId} ei löytynyt tai data on virheellistä.`);
+                     return {...defaultPlayerInfo, teamsThisYear: 'Ei löytynyt'};
+                }
+                
+                const p = playerData.player; 
+
+                const playerName = playerLineupInfoFromMatch.player_name || `${p.first_name || ''} ${p.last_name || ''}`.trim();
+                const shirtNumber = playerLineupInfoFromMatch.shirt_number || 'N/A';
+                
+                let gamesPlayedThisYear = 0; 
+                let goalsThisYear = 0; 
+                let warningsThisYear = 0; 
+                let suspensionsThisYear = 0;
+                let goalsByTeamThisYear = {};
+
+                if (p.matches && Array.isArray(p.matches)) {
+                    p.matches.forEach(match => {
+                        if (match.season_id === CURRENT_YEAR) {
+                            gamesPlayedThisYear++;
+
+                            const currentMatchGoals = parseInt(match.player_goals) || 0;
+                            goalsThisYear += currentMatchGoals;
+                            
+                            if (currentMatchGoals > 0) {
+                                const teamNameForGoal = match.team_name || 'Tuntematon joukkue';
+                                goalsByTeamThisYear[teamNameForGoal] = (goalsByTeamThisYear[teamNameForGoal] || 0) + currentMatchGoals;
+                            }
+
+                            warningsThisYear += parseInt(match.player_warnings) || 0;
+                            suspensionsThisYear += parseInt(match.player_suspensions) || 0;
+                        }
+                    });
+                }
+                
+                let teamsThisYear = [];
+                if (p.teams && Array.isArray(p.teams)) {
+                     p.teams.forEach(teamEntry => {
+                        if (teamEntry.primary_category && 
+                            ( (teamEntry.primary_category.competition_id && teamEntry.primary_category.competition_id.toLowerCase().includes(CURRENT_YEAR.substring(2))) || 
+                              (teamEntry.primary_category.competition_name && teamEntry.primary_category.competition_name.includes(CURRENT_YEAR)) )
+                           ) {
+                            teamsThisYear.push(`${teamEntry.team_name} (${teamEntry.primary_category.category_name || 'Sarja tuntematon'})`);
+                        }
+                     });
+                }
+                 if (teamsThisYear.length === 0 && p.club_name) { 
+                    teamsThisYear.push(`${p.club_name} (Joukkueen tarkka sarja ${CURRENT_YEAR} ei tiedossa)`);
+                }
+                if (teamsThisYear.length === 0) {
+                    teamsThisYear.push("Ei joukkueita tiedossa tälle vuodelle.");
+                }
+
+                return { 
+                    name: playerName, shirtNumber: shirtNumber, birthYear: p.birthyear || 'N/A', 
+                    teamsThisYear: teamsThisYear.join('<br>'),
+                    gamesPlayedThisYear, 
+                    goalsThisYear, 
+                    goalsByTeamThisYear,
+                    warningsThisYear, 
+                    suspensionsThisYear,
+                    position_fi: p.position_fi,
+                    nationality: p.nationality,
+                    img_url: p.img_url,
+                    height: p.height,
+                    weight: p.weight,
+                    finland_raised: p.finland_raised,
+                    isCaptainInMatch: playerLineupInfoFromMatch.captain === "1" || playerLineupInfoFromMatch.captain === "C",
+                    added: p.added, 
+                    removed: p.removed, 
+                    dual_representation: p.dual_representation, 
+                    dual_1_representation: p.dual_1_representation,
+                    dual_2_representation: p.dual_2_representation, 
+                    overage: p.overage, 
+                    parallel_representation: p.parallel_representation, 
+                    exception_representation: p.exception_representation,
+                    teamIdInMatch: teamIdInMatch, 
+                    clubCrest: teamIdInMatch === fullMatchData.team_A_id ? fullMatchData.club_A_crest : fullMatchData.club_B_crest
+                };
+
+            } catch (error) { 
+                console.error(`Virhe pelaajan ${playerId} tietojen käsittelyssä:`, error);
+                 return {...defaultPlayerInfo, teamsThisYear: 'Virhe haussa'};
+            }
+        }
+
+        function displayPlayerStats(stats) { 
+            const card = document.createElement('div');
+            card.className = 'stat-card bg-white border border-gray-200 p-5 rounded-lg shadow-lg hover:shadow-xl';
+            
+            let playerImageHtml = '';
+            if (stats.img_url && stats.img_url !== "https://www.palloliitto.fi/sites/all/themes/palloliitto/images/no-player-image.png") {
+                playerImageHtml = `<img src="${stats.img_url}" alt="Pelaajan kuva" class="player-image" onerror="this.style.display='none';">`;
+            }
+            
+            const crestUrl = stats.clubCrest && stats.clubCrest !== "https://cdn.torneopal.net/logo/palloliitto/x.png" 
+                ? stats.clubCrest 
+                : 'https://placehold.co/40x40/e2e8f0/64748b?text=LOGO'; 
+            
+            let goalsDisplayContent = stats.goalsThisYear.toString();
+            if (stats.goalsThisYear > 0 && stats.goalsByTeamThisYear && Object.keys(stats.goalsByTeamThisYear).length > 0) {
+                if (Object.keys(stats.goalsByTeamThisYear).length === 1 && stats.goalsByTeamThisYear[Object.keys(stats.goalsByTeamThisYear)[0]] === stats.goalsThisYear) {
+                    goalsDisplayContent = stats.goalsThisYear.toString();
+                } else {
+                    goalsDisplayContent = Object.entries(stats.goalsByTeamThisYear)
+                        .map(([teamName, teamGoals]) => `${teamName}: ${teamGoals}`)
+                        .join('<br>');
+                    if (Object.keys(stats.goalsByTeamThisYear).length > 1) {
+                         goalsDisplayContent += `<br><b>Yhteensä: ${stats.goalsThisYear}</b>`;
+                    }
+                }
+            }
+
+            let additionalInfoHtml = '';
+            const fieldsToShow = [
+                { key: 'position_fi', label: 'Pelipaikka', defaultValue: null },
+                { key: 'nationality', label: 'Kansallisuus', defaultValue: null },
+                { key: 'height', label: 'Pituus', defaultValue: '0', suffix: ' cm' },
+                { key: 'weight', label: 'Paino', defaultValue: '0', suffix: ' kg' },
+                { key: 'finland_raised', label: 'Suomessa kasvanut', defaultValue: '0', displayValue: 'Kyllä' },
+                { key: 'isCaptainInMatch', label: 'Kapteeni tässä ottelussa', defaultValue: false, displayValue: 'Kyllä' },
+                { key: 'added', label: 'Lisätty joukkueeseen', defaultValue: '0000-00-00 00:00:00' },
+                { key: 'removed', label: 'Poistettu joukkueesta', defaultValue: '0000-00-00 00:00:00' },
+                { key: 'dual_representation', label: 'Kaksoisedustus', defaultValue: '0' },
+                { key: 'dual_1_representation', label: 'Kaksoisedustus (1)', defaultValue: '0' },
+                { key: 'dual_2_representation', label: 'Kaksoisedustus (2)', defaultValue: '0' },
+                { key: 'overage', label: 'Yli-ikäisyys', defaultValue: '0' },
+                { key: 'parallel_representation', label: 'Rinnakkaisedustus', defaultValue: '' },
+                { key: 'exception_representation', label: 'Poikkeuslupa', defaultValue: '0' }
+            ];
+
+            fieldsToShow.forEach(field => {
+                let value = stats[field.key];
+                if (value && value !== field.defaultValue) {
+                    let displayValue = value;
+                    if (field.displayValue) { 
+                        if (value === true || value === "1") displayValue = field.displayValue;
+                        else return; 
+                    }
+                    if (field.suffix && value !== '0' && value !== null) { 
+                         displayValue += field.suffix;
+                    }
+                    additionalInfoHtml += `<div class="bg-gray-50 p-3 rounded-md"><p class="font-medium text-gray-700">${field.label}:</p><p class="text-gray-600">${displayValue}</p></div>`;
+                }
+            });
+
+            card.innerHTML = `
+                <div class="flex items-center mb-4">
+                    <img src="${crestUrl}" alt="Seuran logo" class="w-10 h-10 mr-3 rounded-full object-contain" onerror="this.src='https://placehold.co/40x40/e2e8f0/64748b?text=LOGO'; this.onerror=null;">
+                    ${playerImageHtml}
+                    <div class="${playerImageHtml ? '' : 'ml-3'}">
+                        <h3 class="text-xl font-semibold text-blue-700">${stats.name} (#${stats.shirtNumber})</h3>
+                        <p class="text-sm text-gray-500">Syntymävuosi: ${stats.birthYear}</p>
+                    </div>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+                    <div class="bg-gray-50 p-3 rounded-md"> <p class="font-medium text-gray-700">Joukkueet (${CURRENT_YEAR}):</p> <p class="text-gray-600">${stats.teamsThisYear || 'Ei tietoa'}</p> </div>
+                    <div class="bg-gray-50 p-3 rounded-md"> <p class="font-medium text-gray-700">Pelatut ottelut (${CURRENT_YEAR}):</p> <p class="text-gray-600">${stats.gamesPlayedThisYear}</p> </div>
+                    <div class="bg-gray-50 p-3 rounded-md"> <p class="font-medium text-gray-700">Maalit (${CURRENT_YEAR}):</p> <p class="text-gray-600">${goalsDisplayContent}</p> </div>
+                    <div class="bg-gray-50 p-3 rounded-md"> <p class="font-medium text-gray-700">Varoitukset (${CURRENT_YEAR}):</p> <p class="text-gray-600">${stats.warningsThisYear}</p> </div>
+                    <div class="bg-gray-50 p-3 rounded-md sm:col-span-2"> <p class="font-medium text-gray-700">Ulosajot (${CURRENT_YEAR}):</p> <p class="text-gray-600">${stats.suspensionsThisYear}</p> </div>
+                </div>
+                ${additionalInfoHtml ? `<div class="mt-4 pt-4 border-t border-gray-200"><h4 class="text-md font-semibold text-gray-700 mb-2">Lisätiedot:</h4><div class="additional-info-grid">${additionalInfoHtml}</div></div>` : ''}
+            `;
+            playerStatsContainer.appendChild(card);
+        }
+    </script>
+</body>
+</html>
