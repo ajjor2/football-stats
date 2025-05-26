@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pelaajatilastot Ottelusta (Parannettu Maalivertailu)</title>
+    <title>Pelaajatilastot Ottelusta (Laajennetut Tiedot)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         body {
@@ -50,20 +50,20 @@
             border-collapse: collapse;
         }
         .standings-table th, .standings-table td {
-            border: 1px solid #e2e8f0;
-            padding: 0.5rem 0.75rem;
+            border: 1px solid #e2e8f0; /* Tailwind gray-200 */
+            padding: 0.5rem 0.75rem; /* Tailwind p-2 px-3 */
             text-align: left;
-            font-size: 0.875rem;
+            font-size: 0.875rem; /* Tailwind text-sm */
         }
         .standings-table th {
-            background-color: #f8fafc;
-            font-weight: 600;
+            background-color: #f8fafc; /* Tailwind gray-50 */
+            font-weight: 600; /* Tailwind font-semibold */
         }
         .standings-table tr:nth-child(even) {
-            background-color: #f9fafb;
+            background-color: #f9fafb; /* Tailwind gray-100 (hieman tummempi kuin body) */
         }
         .standings-table td.team-name {
-            font-weight: 500;
+            font-weight: 500; /* Tailwind font-medium */
         }
          .standings-table .rank { text-align: center; }
         .standings-table .number-col { text-align: right; }
@@ -83,6 +83,15 @@
         .win { background-color: #4ade80; } /* Tailwind green-400 */
         .draw { background-color: #facc15; } /* Tailwind yellow-400 */
         .loss { background-color: #f87171; } /* Tailwind red-400 */
+        
+        .head-to-head-list {
+            font-size: 0.875rem;
+            color: #4b5563; /* Tailwind text-gray-600 */
+        }
+        .head-to-head-list li {
+            padding: 0.125rem 0; /* Tailwind py-0.5 */
+        }
+
     </style>
 </head>
 <body class="bg-gray-100 min-h-screen flex flex-col items-center p-4 sm:p-8">
@@ -131,6 +140,8 @@
 
         const API_BASE_URL = 'https://spl.torneopal.net/taso/rest/';
         const CURRENT_YEAR = "2025"; 
+        const PREVIOUS_YEAR = (parseInt(CURRENT_YEAR) - 1).toString();
+
 
         const API_HEADERS = {
             'Accept': 'json/df8e84j9xtdz269euy3h'
@@ -169,7 +180,7 @@
                 }
                 originalMatchDetails = matchData.match;
                 
-                // 2. Hae lohkon tiedot
+                // 2. Hae lohkon tiedot (sisältäen ottelut H2H-vertailua varten)
                 const { competition_id, category_id, group_id, team_A_id, team_B_id } = originalMatchDetails;
                 if (competition_id && category_id && group_id) {
                     try {
@@ -328,23 +339,49 @@
             }
             
             let goalComparisonHtml = '';
-            // Näytetään maalivertailu vain jos jotain dataa on saatavilla
             if (teamAStatsInGroup || teamBStatsInGroup || lineupGoalsA > 0 || lineupGoalsB > 0 || (match.lineups && match.lineups.length > 0)) {
                 goalComparisonHtml = `
-                <div class="mt-3 mb-2">
-                    <p class="text-gray-700 font-semibold text-sm mb-1 text-center">Maalivertailu (${CURRENT_YEAR}):</p>
-                    <div class="grid grid-cols-2 gap-x-4 text-xs text-center">
-                        
+                <div class="mt-3 mb-3 text-center">
+                    <p class="text-gray-700 font-semibold text-sm mb-2">Maalivertailu (${CURRENT_YEAR}):</p>
+                    <div class="grid grid-cols-2 gap-x-2 text-xs">
                         <div class="font-medium text-gray-800">${teamAName}</div>
                         <div class="font-medium text-gray-800">${teamBName}</div>
-
-                        <div class="text-gray-600">Lohkossa (TM-PM): <span class="font-semibold">${teamAStatsInGroup ? (teamAStatsInGroup.goals_for || 0) + '-' + (teamAStatsInGroup.goals_against || 0) : 'N/A'}</span></div>
-                        <div class="text-gray-600">Lohkossa (TM-PM): <span class="font-semibold">${teamBStatsInGroup ? (teamBStatsInGroup.goals_for || 0) + '-' + (teamBStatsInGroup.goals_against || 0) : 'N/A'}</span></div>
                         
-                        <div class="text-gray-600">Kokoonpanon maalit: <span class="font-semibold">${lineupGoalsA}</span></div>
-                        <div class="text-gray-600">Kokoonpanon maalit: <span class="font-semibold">${lineupGoalsB}</span></div>
+                        <div class="text-gray-600">Lohkossa (TM-PM):</div>
+                        <div class="text-gray-600">Lohkossa (TM-PM):</div>
+                        <div class="font-semibold text-gray-700">${teamAStatsInGroup ? (teamAStatsInGroup.goals_for || 0) + '-' + (teamAStatsInGroup.goals_against || 0) : 'N/A'}</div>
+                        <div class="font-semibold text-gray-700">${teamBStatsInGroup ? (teamBStatsInGroup.goals_for || 0) + '-' + (teamBStatsInGroup.goals_against || 0) : 'N/A'}</div>
+                        
+                        <div class="text-gray-600 mt-1">Kokoonpanon maalit:</div>
+                        <div class="text-gray-600 mt-1">Kokoonpanon maalit:</div>
+                        <div class="font-semibold text-gray-700">${lineupGoalsA}</div>
+                        <div class="font-semibold text-gray-700">${lineupGoalsB}</div>
                     </div>
                 </div>`;
+            }
+
+            let headToHeadHtml = '';
+            if (groupDataForMatchInfo && groupDataForMatchInfo.matches) {
+                const teamAId = match.team_A_id;
+                const teamBId = match.team_B_id;
+                const currentMatchId = match.match_id;
+
+                const previousEncounters = groupDataForMatchInfo.matches.filter(m =>
+                    m.match_id !== currentMatchId && 
+                    ((m.team_A_id === teamAId && m.team_B_id === teamBId) || (m.team_A_id === teamBId && m.team_B_id === teamAId)) &&
+                    m.status === "Played" 
+                ).sort((a, b) => new Date(b.date + 'T' + b.time) - new Date(a.date + 'T' + a.time)) 
+                 .slice(0, 3);
+
+                if (previousEncounters.length > 0) {
+                    headToHeadHtml = `<div class="mt-4 pt-3 border-t border-gray-200">
+                                        <h4 class="text-sm font-semibold text-gray-700 mb-1 text-center">Viimeiset keskinäiset kohtaamiset:</h4>
+                                        <ul class="head-to-head-list text-center">`;
+                    previousEncounters.forEach(enc => {
+                        headToHeadHtml += `<li>${enc.date}: ${enc.team_A_name} ${enc.fs_A} - ${enc.fs_B} ${enc.team_B_name}</li>`;
+                    });
+                    headToHeadHtml += `</ul></div>`;
+                }
             }
             
             matchInfoContainer.innerHTML = `
@@ -353,6 +390,7 @@
                 </h2>
                 <p class="text-xl text-gray-600 text-center mb-2">Tulos: ${scoreA} - ${scoreB}</p>
                 ${goalComparisonHtml}
+                ${headToHeadHtml}
                 <p class="text-sm text-gray-500 text-center mt-3">Päivämäärä: ${match.date || 'N/A'}</p>
                 <p class="text-sm text-gray-500 text-center">Sarja: ${match.category_name || 'N/A'} (${match.competition_name || 'N/A'})</p>
             `;
@@ -436,6 +474,8 @@
                 goalsByTeamThisYear: {},
                 goalsForThisSpecificTeamInSeason: 0, 
                 pastMatchesDetails: [],
+                gamesPlayedLastSeason: 0, 
+                goalsScoredLastSeason: 0, 
                 warningsThisYear: 'N/A',
                 suspensionsThisYear: 0, 
                 position_fi: null, 
@@ -486,6 +526,8 @@
                 let gamesByTeamThisYear = {}; 
                 let goalsForThisSpecificTeamInSeason = 0;
                 let pastMatchesDetails = [];
+                let gamesPlayedLastSeason = 0;
+                let goalsScoredLastSeason = 0;
 
                 const teamNameForThisContext = (teamIdInMatch === fullMatchData.team_A_id) 
                                             ? fullMatchData.team_A_name 
@@ -533,7 +575,11 @@
                                     opponentTeamIdForThisPastMatch = pastMatch.team_A_id;
                                 }
 
-                                if (pastMatch.winner_id && pastMatch.winner_id !== '-' && pastMatch.winner_id !== '0') {
+                                if (pastMatch.status === "Fixture") {
+                                    resultIndicator = 'fixture';
+                                    playerTeamScoreInPastMatch = ''; // Tyhjennetään tuleville peleille
+                                    opponentTeamScoreInPastMatch = '';
+                                } else if (pastMatch.winner_id && pastMatch.winner_id !== '-' && pastMatch.winner_id !== '0') {
                                     if (pastMatch.winner_id === playerTeamIdInThisPastMatch) {
                                         resultIndicator = 'win';
                                     } else if (opponentTeamIdForThisPastMatch && pastMatch.winner_id === opponentTeamIdForThisPastMatch) {
@@ -564,12 +610,16 @@
                                 pastMatchesDetails.push({
                                     date: pastMatch.date,
                                     opponentName: opponentName || 'N/A',
-                                    playerTeamScore: playerTeamScoreInPastMatch !== undefined ? playerTeamScoreInPastMatch : '-',
-                                    opponentTeamScore: opponentTeamScoreInPastMatch !== undefined ? opponentTeamScoreInPastMatch : '-',
+                                    playerTeamScore: playerTeamScoreInPastMatch,
+                                    opponentTeamScore: opponentTeamScoreInPastMatch,
                                     resultIndicator: resultIndicator,
-                                    playerTeamNameInPastMatch: pastMatch.team_name || 'N/A' 
+                                    playerTeamNameInPastMatch: pastMatch.team_name || 'N/A',
+                                    status: pastMatch.status // Lisätään status tänne
                                 });
                             }
+                        } else if (pastMatch.season_id === PREVIOUS_YEAR) { 
+                            gamesPlayedLastSeason++;
+                            goalsScoredLastSeason += parseInt(pastMatch.player_goals) || 0;
                         }
                     });
                 }
@@ -601,6 +651,8 @@
                     goalsByTeamThisYear,
                     goalsForThisSpecificTeamInSeason,
                     pastMatchesDetails,
+                    gamesPlayedLastSeason, 
+                    goalsScoredLastSeason, 
                     warningsThisYear, 
                     suspensionsThisYear,
                     position_fi: p.position_fi,
@@ -708,20 +760,32 @@
                 suspensionsHtml = `<div class="bg-gray-50 p-3 rounded-md sm:col-span-2"> <p class="font-medium text-gray-700">Ulosajot (${CURRENT_YEAR}):</p> <p class="text-gray-600">${stats.suspensionsThisYear}</p> </div>`;
             }
 
+            let previousSeasonStatsHtml = '';
+            if (stats.gamesPlayedLastSeason > 0 || stats.goalsScoredLastSeason > 0) {
+                previousSeasonStatsHtml = `
+                    <div class="bg-gray-50 p-3 rounded-md"><p class="font-medium text-gray-700">Ottelut (${PREVIOUS_YEAR}):</p><p class="text-gray-600">${stats.gamesPlayedLastSeason}</p></div>
+                    <div class="bg-gray-50 p-3 rounded-md"><p class="font-medium text-gray-700">Maalit (${PREVIOUS_YEAR}):</p><p class="text-gray-600">${stats.goalsScoredLastSeason}</p></div>
+                `;
+            }
+
             let pastMatchesHtml = '';
             if (stats.pastMatchesDetails && stats.pastMatchesDetails.length > 0) {
                 pastMatchesHtml += `<div class="mt-4 pt-4 border-t border-gray-200 col-span-1 sm:col-span-2">
                                         <h4 class="text-md font-semibold text-gray-700 mb-2">Pelatut ottelut tälle joukkueelle (${CURRENT_YEAR}):</h4>
                                         <ul class="list-none pl-0 space-y-1">`;
                 stats.pastMatchesDetails.slice(0, 10).forEach(match => { 
-                    let indicatorClass = '';
-                    if (match.resultIndicator === 'win') indicatorClass = 'win';
-                    else if (match.resultIndicator === 'draw') indicatorClass = 'draw';
-                    else if (match.resultIndicator === 'loss') indicatorClass = 'loss';
-                    pastMatchesHtml += `<li class="past-match-item">
-                                            <span class="result-indicator ${indicatorClass}"></span>
-                                            ${match.date}: ${match.playerTeamNameInPastMatch} vs ${match.opponentName} (${match.playerTeamScore}-${match.opponentTeamScore})
-                                        </li>`;
+                    let matchDisplay;
+                    if (match.status === "Fixture") {
+                        matchDisplay = `${match.date}: ${match.playerTeamNameInPastMatch} vs ${match.opponentName} (Tuleva)`;
+                    } else {
+                        let indicatorClass = '';
+                        if (match.resultIndicator === 'win') indicatorClass = 'win';
+                        else if (match.resultIndicator === 'draw') indicatorClass = 'draw';
+                        else if (match.resultIndicator === 'loss') indicatorClass = 'loss';
+                        matchDisplay = `<span class="result-indicator ${indicatorClass}"></span>
+                                        ${match.date}: ${match.playerTeamNameInPastMatch} vs ${match.opponentName} (${match.playerTeamScore}-${match.opponentTeamScore})`;
+                    }
+                    pastMatchesHtml += `<li class="past-match-item">${matchDisplay}</li>`;
                 });
                 pastMatchesHtml += `</ul></div>`;
             }
@@ -742,6 +806,7 @@
                     <div class="bg-gray-50 p-3 rounded-md"> <p class="font-medium text-gray-700">Maalit (${CURRENT_YEAR}):</p> <p class="text-gray-600">${goalsDisplayContent}</p> </div>
                     <div class="bg-gray-50 p-3 rounded-md"> <p class="font-medium text-gray-700">Varoitukset (${CURRENT_YEAR}):</p> <p class="text-gray-600">${stats.warningsThisYear}</p> </div>
                     ${suspensionsHtml}
+                    ${previousSeasonStatsHtml}
                 </div>
                 ${additionalInfoHtml ? `<div class="mt-4 pt-4 border-t border-gray-200"><h4 class="text-md font-semibold text-gray-700 mb-2">Lisätiedot:</h4><div class="additional-info-grid">${additionalInfoHtml}</div></div>` : ''}
                 ${pastMatchesHtml} 
