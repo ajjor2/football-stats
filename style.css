@@ -1,0 +1,133 @@
+body {
+    font-family: 'Inter', sans-serif;
+}
+
+.stat-card {
+    transition: transform 0.2s ease-in-out;
+}
+
+.stat-card:hover {
+    transform: translateY(-5px);
+}
+
+::-webkit-scrollbar {
+    width: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #888;
+    border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #555;
+}
+
+.loader {
+    border: 4px solid #f3f3f3;
+    border-top: 4px solid #3498db;
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    animation: spin 1s linear infinite;
+    margin: 20px auto;
+}
+
+@keyframes spin {
+    0% {
+        transform: rotate(0deg);
+    }
+    100% {
+        transform: rotate(360deg);
+    }
+}
+
+.additional-info-grid,
+.past-matches-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 0.75rem;
+}
+
+.player-image {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    object-fit: cover;
+    margin-left: 0.75rem;
+}
+
+.standings-table {
+    width: 100%;
+    margin-top: 1rem;
+    border-collapse: collapse;
+}
+
+.standings-table th,
+.standings-table td {
+    border: 1px solid #e2e8f0; /* Tailwind gray-200 */
+    padding: 0.5rem 0.75rem; /* Tailwind p-2 px-3 */
+    text-align: left;
+    font-size: 0.875rem; /* Tailwind text-sm */
+}
+
+.standings-table th {
+    background-color: #f8fafc; /* Tailwind gray-50 */
+    font-weight: 600; /* Tailwind font-semibold */
+}
+
+.standings-table tr:nth-child(even) {
+    background-color: #f9fafb; /* Tailwind gray-100 (hieman tummempi kuin body) */
+}
+
+.standings-table td.team-name {
+    font-weight: 500; /* Tailwind font-medium */
+}
+
+.standings-table .rank {
+    text-align: center;
+}
+
+.standings-table .number-col {
+    text-align: right;
+}
+       
+.past-match-item {
+    font-size: 0.875rem;
+    padding: 0.25rem 0;
+}
+
+.result-indicator {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    margin-right: 6px;
+    vertical-align: middle;
+}
+
+.win {
+    background-color: #4ade80; /* Tailwind green-400 */
+}
+
+.draw {
+    background-color: #facc15; /* Tailwind yellow-400 */
+}
+
+.loss {
+    background-color: #f87171; /* Tailwind red-400 */
+}
+        
+.head-to-head-list {
+    font-size: 0.875rem;
+    color: #4b5563; /* Tailwind text-gray-600 */
+}
+
+.head-to-head-list li {
+    padding: 0.125rem 0; /* Tailwind py-0.5 */
+}
