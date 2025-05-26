@@ -1,0 +1,23 @@
+{
+  "name": "app",
+  "version": "1.0.0",
+  "description": "## Project Description The Football Player Statistics Viewer is a web application designed to display detailed statistics for football players participating in a specific match, along with match details and group standings. Users can input a Match ID to fetch and view this information. The application primarily focuses on data from the Finnish Football Association (Suomen Palloliitto) for the year 2025 (and the preceding year for some historical stats).",
+  "main": "script.js",
+  "scripts": {
+    "test": "jest"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ajjor2/football-stats.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/ajjor2/football-stats/issues"
+  },
+  "homepage": "https://github.com/ajjor2/football-stats#readme",
+  "devDependencies": {
+    "jest": "^29.7.0"
+  }
+}
