@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pelaajatilastot Ottelusta (Täydennetyt Tiedot)</title>
+    <title>Pelaajatilastot Ottelusta (Joukkuekohtaiset Menneet Ottelut)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         body {
@@ -32,7 +32,7 @@
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
         }
-        .additional-info-grid {
+        .additional-info-grid, .past-matches-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
             gap: 0.75rem; 
@@ -77,18 +77,21 @@
             margin-top: -0.25rem; 
             margin-bottom: 0.5rem;
         }
-        #playersNotInLineupContainer ul {
-            list-style-type: none;
-            padding-left: 0;
-        }
-        #playersNotInLineupContainer li {
-            padding: 0.25rem 0;
+        .past-match-item {
             font-size: 0.875rem;
+            padding: 0.25rem 0;
         }
-         #playersNotInLineupContainer .player-stats-inline {
-            font-size: 0.75rem;
-            color: #4b5563; /* text-gray-600 */
+        .result-indicator {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: 6px;
+            vertical-align: middle;
         }
+        .win { background-color: #4ade80; } /* Tailwind green-400 */
+        .draw { background-color: #facc15; } /* Tailwind yellow-400 */
+        .loss { background-color: #f87171; } /* Tailwind red-400 */
     </style>
 </head>
 <body class="bg-gray-100 min-h-screen flex flex-col items-center p-4 sm:p-8">
@@ -155,6 +158,7 @@
             let groupDataForInfo = null; 
             let teamAData = null;
             let teamBData = null;
+            let originalMatchDetails = null; 
 
             try {
                 // 1. Hae ottelutiedot
@@ -172,9 +176,10 @@
                 if (!matchData.match) {
                     throw new Error(`Ottelua ${matchId} ei löytynyt tai data on virheellistä.`);
                 }
+                originalMatchDetails = matchData.match;
                 
                 // 2. Hae lohkon tiedot
-                const { competition_id, category_id, group_id, team_A_id, team_B_id } = matchData.match;
+                const { competition_id, category_id, group_id, team_A_id, team_B_id } = originalMatchDetails;
                 if (competition_id && category_id && group_id) {
                     try {
                         const groupResponse = await fetch(`${API_BASE_URL}getGroup?competition_id=${competition_id}&category_id=${category_id}&group_id=${group_id}&matches=1`, { headers: API_HEADERS }); 
@@ -205,18 +210,17 @@
                 }
                 
                 // 4. Hae pelaajien tilastot (kokoonpanossa olevat)
-                const playersInMatch = matchData.match.lineups;
+                const playersInMatch = originalMatchDetails.lineups;
                 if (!playersInMatch || playersInMatch.length === 0) {
                     playerStatsContainer.innerHTML = '<p class="text-gray-700 text-center">Ottelulle ei löytynyt pelaajatietoja.</p>';
-                    displayMatchInfo(matchData.match, groupDataForInfo, 0, 0);
-                    // Edelleen näytetään "ei kokoonpanossa" -pelaajat, vaikka ottelun kokoonpanoa ei olisi
-                    if (teamAData && teamAData.team) await displayPlayersNotInLineup(teamAData.team, [], matchData.match.team_A_name || 'Kotijoukkue', 'A');
-                    if (teamBData && teamBData.team) await displayPlayersNotInLineup(teamBData.team, [], matchData.match.team_B_name || 'Vierasjoukkue', 'B');
+                    displayMatchInfo(originalMatchDetails, groupDataForInfo, 0, 0);
+                    if (teamAData && teamAData.team) await displayPlayersNotInLineup(teamAData.team, [], originalMatchDetails.team_A_name || 'Kotijoukkue', 'A', originalMatchDetails);
+                    if (teamBData && teamBData.team) await displayPlayersNotInLineup(teamBData.team, [], originalMatchDetails.team_B_name || 'Vierasjoukkue', 'B', originalMatchDetails);
                     return;
                 }
                 
                 const playerPromises = playersInMatch.map(playerLineupInfo => 
-                    fetchAndProcessPlayerData(playerLineupInfo.player_id, playerLineupInfo.team_id, matchData.match, playerLineupInfo)
+                    fetchAndProcessPlayerData(playerLineupInfo.player_id, playerLineupInfo.team_id, originalMatchDetails, playerLineupInfo)
                 );
                 
                 const allPlayerStats = await Promise.all(playerPromises);
@@ -224,8 +228,8 @@
                 
                 let totalLineupGoalsTeamA = 0;
                 let totalLineupGoalsTeamB = 0;
-                const teamAName = matchData.match.team_A_name || 'Kotijoukkue';
-                const teamBName = matchData.match.team_B_name || 'Vierasjoukkue';
+                const teamAName = originalMatchDetails.team_A_name || 'Kotijoukkue';
+                const teamBName = originalMatchDetails.team_B_name || 'Vierasjoukkue';
 
                 validPlayerStats.forEach(player => {
                     if (player.teamIdInMatch === team_A_id) {
@@ -235,7 +239,7 @@
                     }
                 });
                 
-                displayMatchInfo(matchData.match, groupDataForInfo, totalLineupGoalsTeamA, totalLineupGoalsTeamB);
+                displayMatchInfo(originalMatchDetails, groupDataForInfo, totalLineupGoalsTeamA, totalLineupGoalsTeamB);
                 
                 validPlayerStats.sort((a, b) => {
                     const getTeamSortOrder = (teamId) => {
@@ -276,17 +280,17 @@
                             }
                             playerStatsContainer.appendChild(teamHeader);
                         }
-                        displayPlayerStats(playerFullStats);
+                        displayPlayerStats(playerFullStats); 
                     });
                 }
 
                 // 5. Näytä pelaajat, jotka eivät olleet kokoonpanossa
                 const matchLineupPlayerIds = playersInMatch.map(p => p.player_id.toString());
                 if (teamAData && teamAData.team) {
-                    await displayPlayersNotInLineup(teamAData.team, matchLineupPlayerIds, teamAName, 'A');
+                    await displayPlayersNotInLineup(teamAData.team, matchLineupPlayerIds, teamAName, 'A', originalMatchDetails);
                 }
                 if (teamBData && teamBData.team) {
-                    await displayPlayersNotInLineup(teamBData.team, matchLineupPlayerIds, teamBName, 'B');
+                    await displayPlayersNotInLineup(teamBData.team, matchLineupPlayerIds, teamBName, 'B', originalMatchDetails);
                 }
 
             } catch (error) {
@@ -431,7 +435,8 @@
                 gamesByTeamThisYear: {}, 
                 goalsThisYear: 0,
                 goalsByTeamThisYear: {},
-                goalsForThisSpecificTeamInSeason: 0,
+                goalsForThisSpecificTeamInSeason: 0, 
+                pastMatchesDetails: [],
                 warningsThisYear: 'N/A',
                 suspensionsThisYear: 0, 
                 position_fi: null, 
@@ -443,7 +448,7 @@
                 isCaptainInMatch: false,
                 added: null, removed: null, dual_representation: null, dual_1_representation: null,
                 dual_2_representation: null, overage: null, parallel_representation: null, exception_representation: null,
-                teamIdInMatch: teamIdInMatch,
+                teamIdInMatch: teamIdInMatch, 
                 clubCrest: teamIdInMatch === fullMatchData.team_A_id ? fullMatchData.club_A_crest : fullMatchData.club_B_crest
             };
 
@@ -481,31 +486,97 @@
                 let goalsByTeamThisYear = {};
                 let gamesByTeamThisYear = {}; 
                 let goalsForThisSpecificTeamInSeason = 0;
+                let pastMatchesDetails = [];
 
-                const teamNameForThisMatch = (teamIdInMatch === fullMatchData.team_A_id) 
+                const teamNameForThisContext = (teamIdInMatch === fullMatchData.team_A_id) 
                                             ? fullMatchData.team_A_name 
-                                            : fullMatchData.team_B_name;
+                                            : (teamIdInMatch === fullMatchData.team_B_id ? fullMatchData.team_B_name : null);
+
 
                 if (p.matches && Array.isArray(p.matches)) {
-                    p.matches.forEach(match => {
-                        if (match.season_id === CURRENT_YEAR) {
+                    p.matches.forEach(pastMatch => { 
+                        if (pastMatch.season_id === CURRENT_YEAR) {
                             gamesPlayedThisYear++;
-                            const teamNameForGame = match.team_name || 'Tuntematon joukkue';
+                            const teamNameForGame = pastMatch.team_name || 'Tuntematon joukkue';
                             gamesByTeamThisYear[teamNameForGame] = (gamesByTeamThisYear[teamNameForGame] || 0) + 1; 
 
-                            const currentMatchPlayerGoals = parseInt(match.player_goals) || 0;
+                            const currentMatchPlayerGoals = parseInt(pastMatch.player_goals) || 0;
                             goalsThisYear += currentMatchPlayerGoals;
                             
                             if (currentMatchPlayerGoals > 0) {
-                                const teamNameForGoal = match.team_name || 'Tuntematon joukkue';
+                                const teamNameForGoal = pastMatch.team_name || 'Tuntematon joukkue';
                                 goalsByTeamThisYear[teamNameForGoal] = (goalsByTeamThisYear[teamNameForGoal] || 0) + currentMatchPlayerGoals;
                                 
-                                if (teamNameForGoal === teamNameForThisMatch) {
+                                if (teamNameForGoal && teamNameForThisContext && teamNameForGoal === teamNameForThisContext) {
                                     goalsForThisSpecificTeamInSeason += currentMatchPlayerGoals;
                                 }
                             }
-                            warningsThisYear += parseInt(match.player_warnings) || 0;
-                            suspensionsThisYear += parseInt(match.player_suspensions) || 0;
+                            warningsThisYear += parseInt(pastMatch.player_warnings) || 0;
+                            suspensionsThisYear += parseInt(pastMatch.player_suspensions) || 0;
+
+                            // Kerää tiedot menneistä otteluista VAIN jos pelaajan joukkue tässä menneessä ottelussa on sama kuin teamNameForThisContext
+                            if (pastMatch.team_name === teamNameForThisContext) {
+                                let opponentName = '';
+                                let playerTeamScoreInPastMatch = '';
+                                let opponentTeamScoreInPastMatch = '';
+                                let resultIndicator = '';
+                                const playerTeamIdInThisPastMatch = pastMatch.team_id; // Pelaajan joukkueen ID tässä menneessä ottelussa
+                                let opponentTeamIdForThisPastMatch = null;
+                                
+                                if (playerTeamIdInThisPastMatch === pastMatch.team_A_id) {
+                                    opponentName = pastMatch.team_B_name;
+                                    playerTeamScoreInPastMatch = pastMatch.fs_A;
+                                    opponentTeamScoreInPastMatch = pastMatch.fs_B;
+                                    opponentTeamIdForThisPastMatch = pastMatch.team_B_id;
+                                } else if (playerTeamIdInThisPastMatch === pastMatch.team_B_id) {
+                                    opponentName = pastMatch.team_A_name;
+                                    playerTeamScoreInPastMatch = pastMatch.fs_B;
+                                    opponentTeamScoreInPastMatch = pastMatch.fs_A;
+                                    opponentTeamIdForThisPastMatch = pastMatch.team_A_id;
+                                } else {
+                                    // Tämä ei pitäisi tapahtua, jos pastMatch.team_name === teamNameForThisContext
+                                    opponentName = 'Vastustaja'; 
+                                    playerTeamScoreInPastMatch = '?';
+                                    opponentTeamScoreInPastMatch = '?';
+                                }
+
+                                if (pastMatch.winner_id && pastMatch.winner_id !== '-' && pastMatch.winner_id !== '0') {
+                                    if (pastMatch.winner_id === playerTeamIdInThisPastMatch) {
+                                        resultIndicator = 'win';
+                                    } else if (opponentTeamIdForThisPastMatch && pastMatch.winner_id === opponentTeamIdForThisPastMatch) {
+                                        resultIndicator = 'loss';
+                                    } else { 
+                                        const pScore = parseInt(playerTeamScoreInPastMatch);
+                                        const oScore = parseInt(opponentTeamScoreInPastMatch);
+                                        if (!isNaN(pScore) && !isNaN(oScore)) {
+                                            if (pScore > oScore) resultIndicator = 'win';
+                                            else if (pScore < oScore) resultIndicator = 'loss';
+                                            else resultIndicator = 'draw';
+                                        } else {
+                                            resultIndicator = 'draw'; 
+                                        }
+                                    }
+                                } else { 
+                                     const pScoreNum = parseInt(playerTeamScoreInPastMatch);
+                                     const oScoreNum = parseInt(opponentTeamScoreInPastMatch);
+                                     if (!isNaN(pScoreNum) && !isNaN(oScoreNum)) {
+                                         if (pScoreNum > oScoreNum) resultIndicator = 'win';
+                                         else if (pScoreNum < oScoreNum) resultIndicator = 'loss';
+                                         else resultIndicator = 'draw';
+                                     } else {
+                                         resultIndicator = 'draw'; 
+                                     }
+                                }
+
+                                pastMatchesDetails.push({
+                                    date: pastMatch.date,
+                                    opponentName: opponentName || 'N/A',
+                                    playerTeamScore: playerTeamScoreInPastMatch !== undefined ? playerTeamScoreInPastMatch : '-',
+                                    opponentTeamScore: opponentTeamScoreInPastMatch !== undefined ? opponentTeamScoreInPastMatch : '-',
+                                    resultIndicator: resultIndicator,
+                                    playerTeamNameInPastMatch: pastMatch.team_name || 'N/A' 
+                                });
+                            }
                         }
                     });
                 }
@@ -536,6 +607,7 @@
                     goalsThisYear, 
                     goalsByTeamThisYear,
                     goalsForThisSpecificTeamInSeason,
+                    pastMatchesDetails,
                     warningsThisYear, 
                     suspensionsThisYear,
                     position_fi: p.position_fi,
@@ -563,7 +635,7 @@
             }
         }
 
-        function displayPlayerStats(stats) { 
+        function createPlayerStatCardElement(stats) {
             const card = document.createElement('div');
             card.className = 'stat-card bg-white border border-gray-200 p-5 rounded-lg shadow-lg hover:shadow-xl';
             
@@ -610,7 +682,6 @@
                 { key: 'height', label: 'Pituus', defaultValue: '0', suffix: ' cm' },
                 { key: 'weight', label: 'Paino', defaultValue: '0', suffix: ' kg' },
                 { key: 'finland_raised', label: 'Suomessa kasvanut', defaultValue: '0', displayValue: 'Kyllä' },
-                { key: 'isCaptainInMatch', label: 'Kapteeni tässä ottelussa', defaultValue: false, displayValue: 'Kyllä' },
                 { key: 'added', label: 'Lisätty joukkueeseen', defaultValue: '0000-00-00 00:00:00' },
                 { key: 'removed', label: 'Poistettu joukkueesta', defaultValue: '0000-00-00 00:00:00' },
                 { key: 'dual_representation', label: 'Kaksoisedustus', defaultValue: '0' },
@@ -620,6 +691,9 @@
                 { key: 'parallel_representation', label: 'Rinnakkaisedustus', defaultValue: '' },
                 { key: 'exception_representation', label: 'Poikkeuslupa', defaultValue: '0' }
             ];
+            if (stats.isCaptainInMatch) { 
+                fieldsToShow.splice(4, 0, { key: 'isCaptainInMatch', label: 'Kapteeni tässä ottelussa', defaultValue: false, displayValue: 'Kyllä' });
+            }
 
             fieldsToShow.forEach(field => {
                 let value = stats[field.key];
@@ -641,6 +715,25 @@
                 suspensionsHtml = `<div class="bg-gray-50 p-3 rounded-md sm:col-span-2"> <p class="font-medium text-gray-700">Ulosajot (${CURRENT_YEAR}):</p> <p class="text-gray-600">${stats.suspensionsThisYear}</p> </div>`;
             }
 
+            let pastMatchesHtml = '';
+            if (stats.pastMatchesDetails && stats.pastMatchesDetails.length > 0) {
+                pastMatchesHtml += `<div class="mt-4 pt-4 border-t border-gray-200 col-span-1 sm:col-span-2">
+                                        <h4 class="text-md font-semibold text-gray-700 mb-2">Pelatut ottelut tälle joukkueelle (${CURRENT_YEAR}):</h4>
+                                        <ul class="list-none pl-0 space-y-1">`;
+                stats.pastMatchesDetails.slice(0, 10).forEach(match => { 
+                    let indicatorClass = '';
+                    if (match.resultIndicator === 'win') indicatorClass = 'win';
+                    else if (match.resultIndicator === 'draw') indicatorClass = 'draw';
+                    else if (match.resultIndicator === 'loss') indicatorClass = 'loss';
+                    pastMatchesHtml += `<li class="past-match-item">
+                                            <span class="result-indicator ${indicatorClass}"></span>
+                                            ${match.date}: ${match.playerTeamNameInPastMatch} vs ${match.opponentName} (${match.playerTeamScore}-${match.opponentTeamScore})
+                                        </li>`;
+                });
+                pastMatchesHtml += `</ul></div>`;
+            }
+
+
             card.innerHTML = `
                 <div class="flex items-center mb-4">
                     <img src="${crestUrl}" alt="Seuran logo" class="w-10 h-10 mr-3 rounded-full object-contain" onerror="this.src='https://placehold.co/40x40/e2e8f0/64748b?text=LOGO'; this.onerror=null;">
@@ -658,41 +751,17 @@
                     ${suspensionsHtml}
                 </div>
                 ${additionalInfoHtml ? `<div class="mt-4 pt-4 border-t border-gray-200"><h4 class="text-md font-semibold text-gray-700 mb-2">Lisätiedot:</h4><div class="additional-info-grid">${additionalInfoHtml}</div></div>` : ''}
+                ${pastMatchesHtml} 
             `;
-            playerStatsContainer.appendChild(card);
+            return card;
         }
 
-        async function getPlayerSeasonStatsForTeam(playerId, targetTeamName) {
-            if (!playerId) return { games: 0, goals: 0 };
-            try {
-                const playerResponse = await fetch(`${API_BASE_URL}getPlayer?player_id=${playerId.toString()}`, { headers: API_HEADERS });
-                if (!playerResponse.ok) {
-                    console.error(`Pelaajan ${playerId} (ei kokoonpanossa) haku epäonnistui. Status: ${playerResponse.status}`);
-                    return { games: 0, goals: 0 };
-                }
-                const playerData = await playerResponse.json();
-                if (!playerData.player || !playerData.player.matches || !Array.isArray(playerData.player.matches)) {
-                    return { games: 0, goals: 0 };
-                }
-
-                let gamesForTeam = 0;
-                let goalsForTeam = 0;
-
-                playerData.player.matches.forEach(match => {
-                    // Varmistetaan, että match.team_name on olemassa ennen vertailua
-                    if (match.season_id === CURRENT_YEAR && match.team_name && match.team_name === targetTeamName) {
-                        gamesForTeam++;
-                        goalsForTeam += parseInt(match.player_goals) || 0;
-                    }
-                });
-                return { games: gamesForTeam, goals: goalsForTeam };
-            } catch (error) {
-                console.error(`Virhe haettaessa pelaajan ${playerId} (ei kokoonpanossa) tilastoja joukkueelle ${targetTeamName}:`, error);
-                return { games: 0, goals: 0 };
-            }
+        function displayPlayerStats(stats) { 
+            const cardElement = createPlayerStatCardElement(stats);
+            playerStatsContainer.appendChild(cardElement);
         }
 
-        async function displayPlayersNotInLineup(teamDetails, matchLineupPlayerIds, teamDisplayName, teamType) {
+        async function displayPlayersNotInLineup(teamDetails, matchLineupPlayerIds, teamDisplayName, teamType, originalMatchDetails) {
             if (!teamDetails || !teamDetails.players || teamDetails.players.length === 0) {
                 return; 
             }
@@ -703,45 +772,47 @@
 
             if (playersNotInMatch.length > 0) {
                 const sectionDiv = document.createElement('div');
-                sectionDiv.className = 'mt-8 p-6 bg-white border border-gray-200 rounded-lg shadow-lg';
+                sectionDiv.className = 'mt-8 p-6 bg-gray-100 rounded-lg shadow-inner';
                 
                 const header = document.createElement('h3');
-                header.className = 'text-xl font-semibold text-gray-700 mb-3';
-                header.textContent = `Pelaajat, jotka eivät kokoonpanossa (${teamDisplayName})`;
+                header.className = 'text-xl font-semibold text-gray-800 mb-4 border-b pb-2';
+                header.textContent = `Muut joukkueen pelaajat (${teamDisplayName})`;
                 sectionDiv.appendChild(header);
 
-                const list = document.createElement('ul');
-                list.className = 'divide-y divide-gray-200';
+                const cardsContainer = document.createElement('div');
+                cardsContainer.className = 'space-y-6'; 
                 
-                // Järjestetään pelaajat ennen kuin heille haetaan tilastoja
                 playersNotInMatch.sort((a,b) => (a.last_name || '').localeCompare(b.last_name || '') || (a.first_name || '').localeCompare(b.first_name || ''));
 
-                // Käytetään Promise.allia, jotta kaikki pelaajatiedot haetaan rinnakkain
-                const listItemsPromises = playersNotInMatch.map(async player => {
-                    const listItem = document.createElement('li');
-                    listItem.className = 'py-2';
-                    let playerName = `${player.first_name || ''} ${player.last_name || ''}`.trim();
-                    if (!playerName) playerName = `Pelaaja ID: ${player.player_id}`;
-                    
-                    let playerText = `${player.shirt_number ? `#${player.shirt_number} ` : ''}${playerName}`;
-
-                    // Hae ja lisää pelaajan tilastot tälle joukkueelle
-                    const stats = await getPlayerSeasonStatsForTeam(player.player_id, teamDetails.team_name); // Käytetään teamDetails.team_name
-                    playerText += ` <span class="player-stats-inline">(Ottelut: ${stats.games}, Maalit: ${stats.goals})</span>`;
-                    
-                    listItem.textContent = playerText; // textContent ei tulkitse HTML:ää, joten käytetään innerHTML jos halutaan span-elementti
-                    listItem.innerHTML = playerText; // Korjattu käyttämään innerHTML span-elementin muotoiluun
-                    return listItem;
+                const playerStatPromises = playersNotInMatch.map(async (playerFromTeam) => {
+                    const playerLineupInfo = { 
+                        player_id: playerFromTeam.player_id,
+                        player_name: `${playerFromTeam.first_name || ''} ${playerFromTeam.last_name || ''}`.trim() || `Pelaaja ID: ${playerFromTeam.player_id}`,
+                        shirt_number: playerFromTeam.shirt_number || 'N/A',
+                        team_id: teamDetails.team_id, 
+                        captain: '' 
+                    };
+                    // Välitetään teamDetails.team_id teamIdInMatch-parametrina, jotta tiedetään minkä joukkueen näkökulmasta tilastoja haetaan
+                    return fetchAndProcessPlayerData(playerFromTeam.player_id, teamDetails.team_id, originalMatchDetails, playerLineupInfo);
                 });
 
-                const resolvedListItems = await Promise.all(listItemsPromises);
-                resolvedListItems.forEach(item => list.appendChild(item));
-                
-                sectionDiv.appendChild(list);
+                const resolvedPlayerStatsArray = (await Promise.all(playerStatPromises)).filter(stats => stats !== null);
+
+                if (resolvedPlayerStatsArray.length > 0) {
+                    resolvedPlayerStatsArray.forEach(stats => {
+                        const cardElement = createPlayerStatCardElement(stats);
+                        cardsContainer.appendChild(cardElement);
+                    });
+                    sectionDiv.appendChild(cardsContainer);
+                } else {
+                    const noPlayersMsg = document.createElement('p');
+                    noPlayersMsg.className = 'text-gray-600';
+                    noPlayersMsg.textContent = 'Ei muita pelaajia näytettäväksi tälle joukkueelle.';
+                    sectionDiv.appendChild(noPlayersMsg);
+                }
                 playersNotInLineupContainer.appendChild(sectionDiv);
             }
         }
-
     </script>
 </body>
 </html>
