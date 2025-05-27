@@ -1,19 +1,27 @@
-// Imports from new modules
-import { config } from './js/config.js'; // Re-exported
+// script.js
+import { config } from './js/config.js';
 import { clearPreviousData, showLoading, displayError } from './js/utils.js';
-import { fetchMatchDetails, fetchGroupDetails, fetchTeamData } from './js/apiService.js';
-import { processPlayerMatchHistory } from './js/dataProcessor.js'; // Re-exported
-import { 
-    displayGroupInfoAndStandings, 
-    processAndDisplayPlayerStats, 
-    displayPlayersNotInLineup 
+import { fetchMatchDetails, fetchGroupDetails, fetchTeamData, fetchTeamMatches } from './js/apiService.js';
+import { processPlayerMatchHistory } from './js/dataProcessor.js'; // Used by fetchAndProcessPlayerData
+import {
+    displayGroupInfoAndStandings,
+    processAndDisplayPlayerStats,
+    displayPlayersNotInLineup,
+    displayMatchInfo, // Used to initially display match info before player stats are fully processed
+    displayTeamRecentAndUpcomingMatches
 } from './js/uiManager.js';
 
-// DOM Element Constants - Initialize only in browser environment
-let matchIdInput, fetchDataButton, playerStatsContainer, matchInfoContainer, 
-    groupInfoContainer, playersNotInLineupContainer, loadingIndicator, errorMessageContainer;
+// DOM Element Constants
+let matchIdInput, fetchDataButton, playerStatsContainer, matchInfoContainer,
+    groupInfoContainer, playersNotInLineupContainer, loadingIndicator, errorMessageContainer,
+    showMoreInfoButton, moreMatchInfoContainer; // New elements
 
-if (typeof window !== 'undefined' && typeof document !== 'undefined') {
+// Store current match details for the "More Info" button
+let currentMatchDetails = null;
+let moreInfoFetched = false; // To track if more info has been fetched to avoid re-fetch on simple toggle
+
+// Initialize DOM elements once the DOM is ready
+function initializeDOMElements() {
     matchIdInput = document.getElementById('matchIdInput');
     fetchDataButton = document.getElementById('fetchDataButton');
     playerStatsContainer = document.getElementById('playerStatsContainer');
@@ -22,19 +30,39 @@ if (typeof window !== 'undefined' && typeof document !== 'undefined') {
     playersNotInLineupContainer = document.getElementById('playersNotInLineupContainer');
     loadingIndicator = document.getElementById('loadingIndicator');
     errorMessageContainer = document.getElementById('errorMessage');
+    showMoreInfoButton = document.getElementById('showMoreInfoButton');
+    moreMatchInfoContainer = document.getElementById('moreMatchInfoContainer');
 }
 
-// --- Main Application Logic ---
 
 /**
- * Main function to orchestrate fetching and displaying all data.
+ * Clears all previously displayed data from the UI, including the "More Info" section.
+ */
+function clearAllUIData() {
+    if (typeof clearPreviousData === 'function') { // Ensure imported util is available
+        clearPreviousData(); // This should handle basic containers
+    }
+    // Explicitly handle new elements
+    if (showMoreInfoButton) {
+        showMoreInfoButton.classList.add('hidden');
+        showMoreInfoButton.textContent = 'Lisätietoja Joukkueista';
+        showMoreInfoButton.disabled = false;
+    }
+    if (moreMatchInfoContainer) {
+        moreMatchInfoContainer.innerHTML = '';
+        moreMatchInfoContainer.classList.add('hidden');
+    }
+    currentMatchDetails = null;
+    moreInfoFetched = false;
+}
+
+
+/**
+ * Main function to orchestrate fetching and displaying all data for a match.
  */
 async function loadMatchData() {
     if (!matchIdInput) {
         console.error("matchIdInput is not initialized.");
-        // displayError might not be available if utils.js itself had an issue or DOM not ready.
-        // So, also log to console.
-        console.error("Syötä ottelun ID. (Application initialization error)"); 
         if (typeof displayError === 'function') displayError("Sovelluksen alustusvirhe. Tarkista konsoli.");
         return;
     }
@@ -44,49 +72,53 @@ async function loadMatchData() {
         return;
     }
 
-    // Ensure utils functions are available
-    if (typeof clearPreviousData !== 'function' || typeof showLoading !== 'function' || typeof displayError !== 'function') {
-        console.error("Core utility functions are not loaded. Cannot proceed.");
-        return;
-    }
-
-    clearPreviousData();
+    clearAllUIData(); // Use the comprehensive clear function
     showLoading(true);
-    displayError("");
+    // displayError(""); // clearAllUIData should handle this
 
     try {
-        const matchDetails = await fetchMatchDetails(matchId);
-        if (!matchDetails) {
-            // displayError would have been called by fetchMatchDetails in apiService.js
-            showLoading(false); // Ensure loading is hidden
+        const matchDetailsResponse = await fetchMatchDetails(matchId);
+        if (!matchDetailsResponse) {
+            showLoading(false); // Ensure loading is hidden if match details fetch fails
             return;
         }
+        currentMatchDetails = matchDetailsResponse;
 
-        const groupDataForInfo = await fetchGroupDetails(matchDetails);
-        if (groupDataForInfo && typeof displayGroupInfoAndStandings === 'function') {
-            displayGroupInfoAndStandings(groupDataForInfo, matchDetails.team_A_id, matchDetails.team_B_id, groupInfoContainer);
+        // Initial display of match info (without lineup goals yet)
+        if (typeof displayMatchInfo === 'function' && matchInfoContainer) {
+             displayMatchInfo(currentMatchDetails, null, 0, 0, matchInfoContainer);
         }
 
-        const [teamAData, teamBData] = await Promise.all([
-            fetchTeamData(matchDetails.team_A_id),
-            fetchTeamData(matchDetails.team_B_id)
-        ]);
-        
-        if (typeof processAndDisplayPlayerStats === 'function') {
+        const groupDataForInfo = await fetchGroupDetails(currentMatchDetails);
+        if (groupDataForInfo && typeof displayGroupInfoAndStandings === 'function' && groupInfoContainer) {
+            displayGroupInfoAndStandings(groupDataForInfo, currentMatchDetails.team_A_id, currentMatchDetails.team_B_id, groupInfoContainer);
+        }
+
+        if (typeof processAndDisplayPlayerStats === 'function' && playerStatsContainer && matchInfoContainer) {
             const { lineupPlayerIds, teamAName, teamBName } = await processAndDisplayPlayerStats(
-                matchDetails.lineups, 
-                matchDetails, 
-                groupDataForInfo, 
-                playerStatsContainer, 
-                matchInfoContainer 
+                currentMatchDetails.lineups,
+                currentMatchDetails,
+                groupDataForInfo, // Pass groupData here for H2H and referee context in displayMatchInfo
+                playerStatsContainer,
+                matchInfoContainer // This will re-render matchInfo with lineup goals
             );
 
-            if (teamAData && teamAData.team && typeof displayPlayersNotInLineup === 'function') {
-                await displayPlayersNotInLineup(teamAData.team, lineupPlayerIds, teamAName, matchDetails, playersNotInLineupContainer);
+            const [teamAData, teamBData] = await Promise.all([
+                fetchTeamData(currentMatchDetails.team_A_id),
+                fetchTeamData(currentMatchDetails.team_B_id)
+            ]);
+
+            if (teamAData && teamAData.team && typeof displayPlayersNotInLineup === 'function' && playersNotInLineupContainer) {
+                await displayPlayersNotInLineup(teamAData.team, lineupPlayerIds, teamAName, currentMatchDetails, playersNotInLineupContainer);
             }
-            if (teamBData && teamBData.team && typeof displayPlayersNotInLineup === 'function') {
-                await displayPlayersNotInLineup(teamBData.team, lineupPlayerIds, teamBName, matchDetails, playersNotInLineupContainer);
+            if (teamBData && teamBData.team && typeof displayPlayersNotInLineup === 'function' && playersNotInLineupContainer) {
+                await displayPlayersNotInLineup(teamBData.team, lineupPlayerIds, teamBName, currentMatchDetails, playersNotInLineupContainer);
             }
+        }
+
+        // Show the "Lisätietoja" button now that main data is loaded
+        if (showMoreInfoButton) {
+            showMoreInfoButton.classList.remove('hidden');
         }
 
     } catch (error) {
@@ -97,23 +129,98 @@ async function loadMatchData() {
     }
 }
 
-// --- Event Listeners ---
-if (typeof window !== 'undefined' && typeof document !== 'undefined') {
-    if(fetchDataButton) { 
-        fetchDataButton.addEventListener('click', loadMatchData);
-    } else {
-        console.error("Fetch Data Button not found during event listener setup.");
+/**
+ * Fetches and displays more detailed match info (past/future games for teams).
+ */
+async function loadMoreTeamInfo() {
+    if (!currentMatchDetails) {
+        if (typeof displayError === 'function') displayError("Pääottelun tiedot puuttuvat. Lataa ottelu ensin.");
+        return;
+    }
+    if (!moreMatchInfoContainer || !showMoreInfoButton) return;
+
+    // If already fetched and visible, just hide it
+    if (!moreMatchInfoContainer.classList.contains('hidden') && moreInfoFetched) {
+        moreMatchInfoContainer.classList.add('hidden');
+        showMoreInfoButton.textContent = 'Lisätietoja Joukkueista';
+        return;
+    }
+    // If hidden but already fetched, just show it
+    if (moreMatchInfoContainer.classList.contains('hidden') && moreInfoFetched) {
+        moreMatchInfoContainer.classList.remove('hidden');
+        showMoreInfoButton.textContent = 'Piilota Lisätiedot';
+        return;
     }
 
+    // If not fetched yet, or if it was hidden and cleared (moreInfoFetched would be false)
+    showMoreInfoButton.textContent = 'Ladataan...';
+    showMoreInfoButton.disabled = true;
+    moreMatchInfoContainer.innerHTML = '<div class="loader my-4"></div>'; // Centered loader
+    moreMatchInfoContainer.classList.remove('hidden');
+
+    try {
+        const teamAId = currentMatchDetails.team_A_id;
+        const teamBId = currentMatchDetails.team_B_id;
+        const teamAName = currentMatchDetails.team_A_name || `Joukkue ${teamAId}`;
+        const teamBName = currentMatchDetails.team_B_name || `Joukkue ${teamBId}`;
+        const matchDate = currentMatchDetails.date;
+        const currentYear = config.CURRENT_YEAR; // Use config for current year
+        const startDate = `${currentYear}-01-01`;
+
+        const [matchesTeamA, matchesTeamB] = await Promise.all([
+            fetchTeamMatches(teamAId, startDate),
+            fetchTeamMatches(teamBId, startDate)
+        ]);
+
+        moreMatchInfoContainer.innerHTML = ''; // Clear loader
+
+        if (typeof displayTeamRecentAndUpcomingMatches === 'function') {
+            displayTeamRecentAndUpcomingMatches(teamAId, teamAName, matchesTeamA, matchDate, currentMatchDetails.match_id, moreMatchInfoContainer);
+            displayTeamRecentAndUpcomingMatches(teamBId, teamBName, matchesTeamB, matchDate, currentMatchDetails.match_id, moreMatchInfoContainer);
+            moreInfoFetched = true;
+            showMoreInfoButton.textContent = 'Piilota Lisätiedot';
+        } else {
+            moreMatchInfoContainer.innerHTML = '<p class="text-red-500 text-center">Virhe: Ottelulistan näyttöfunktio puuttuu.</p>';
+            showMoreInfoButton.textContent = 'Lisätietoja Joukkueista';
+            moreInfoFetched = false;
+        }
+
+    } catch (error) {
+        console.error("Error fetching more team info:", error);
+        moreMatchInfoContainer.innerHTML = `<p class="text-red-500 text-center">Virhe haettaessa lisätietoja: ${error.message}</p>`;
+        showMoreInfoButton.textContent = 'Yritä Uudelleen'; // Or revert
+        moreInfoFetched = false;
+    } finally {
+        showMoreInfoButton.disabled = false;
+    }
+}
+
+
+// --- Event Listeners ---
+if (typeof window !== 'undefined' && typeof document !== 'undefined') {
     document.addEventListener('DOMContentLoaded', () => {
+        initializeDOMElements(); // Initialize DOM elements after DOM is loaded
+
+        if (fetchDataButton) {
+            fetchDataButton.addEventListener('click', loadMatchData);
+        } else {
+            console.error("Fetch Data Button not found during event listener setup.");
+        }
+
+        if (showMoreInfoButton) {
+            showMoreInfoButton.addEventListener('click', loadMoreTeamInfo);
+        } else {
+            console.error("Show More Info Button not found during event listener setup.");
+        }
+
         const queryParams = new URLSearchParams(window.location.search);
-        const matchIdFromQuery = queryParams.get('matchid'); 
+        const matchIdFromQuery = queryParams.get('matchid');
 
         if (matchIdFromQuery) {
             if (matchIdInput) {
                 matchIdInput.value = matchIdFromQuery;
                 if (typeof loadMatchData === 'function') {
-                    loadMatchData();
+                    loadMatchData(); // Automatically load data if matchid is in URL
                 } else {
                     console.error("loadMatchData function not available on DOMContentLoaded for query param.");
                 }
@@ -124,9 +231,5 @@ if (typeof window !== 'undefined' && typeof document !== 'undefined') {
     });
 }
 
-// Re-exporting for testing purposes or other consumers
+// Re-exporting for testing purposes or other consumers (if any)
 export { processPlayerMatchHistory, config };
-
-// Export the main function if it needs to be callable from elsewhere (e.g. inline script in HTML)
-// For now, it's primarily triggered by event listeners.
-// export { loadMatchData };
