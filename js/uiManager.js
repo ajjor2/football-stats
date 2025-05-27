@@ -1,14 +1,9 @@
-// UI management functions, formerly in script.js
+// js/uiManager.js
+// UI management functions
 
 import { config } from './config.js';
-import { createStatItemHtml } from './utils.js'; 
+import { createStatItemHtml } from './utils.js';
 import { fetchAndProcessPlayerData } from './dataProcessor.js';
-
-// Note on DOM Element Constants:
-// The functions moved into this module (e.g., displayMatchInfo, displayGroupInfoAndStandings,
-// processAndDisplayPlayerStats) currently rely on global DOM element variables 
-// defined in script.js (e.g., matchInfoContainer, groupInfoContainer, playerStatsContainer, 
-// playersNotInLineupContainer). These dependencies will be addressed in a subsequent refactoring step.
 
 /**
  * Creates the HTML element for a player statistics card.
@@ -18,15 +13,15 @@ import { fetchAndProcessPlayerData } from './dataProcessor.js';
 function createPlayerStatCardElement(stats) {
     const card = document.createElement('div');
     card.className = 'stat-card bg-white border border-gray-200 p-5 rounded-lg shadow-lg hover:shadow-xl';
-    
+
     const playerImageHtml = (stats.img_url && stats.img_url !== config.NO_PLAYER_IMAGE_URL)
         ? `<img src="${stats.img_url}" alt="Pelaajan kuva" class="player-image" onerror="this.style.display='none';">`
         : '';
-    
-    const crestUrl = (stats.clubCrest && stats.clubCrest !== config.DEFAULT_CREST_URL) 
-        ? stats.clubCrest 
+
+    const crestUrl = (stats.clubCrest && stats.clubCrest !== config.DEFAULT_CREST_URL)
+        ? stats.clubCrest
         : config.PLACEHOLDER_CREST_URL;
-    
+
     let goalsDisplayContent = stats.goalsThisYear.toString();
     if (stats.goalsThisYear > 0 && stats.goalsByTeamThisYear && Object.keys(stats.goalsByTeamThisYear).length > 0) {
         if (!(Object.keys(stats.goalsByTeamThisYear).length === 1 && stats.goalsByTeamThisYear[Object.keys(stats.goalsByTeamThisYear)[0]] === stats.goalsThisYear)) {
@@ -69,19 +64,18 @@ function createPlayerStatCardElement(stats) {
         let displayValue = value;
         if (field.displayValue) {
             if (value === true || String(value) === "1") displayValue = field.displayValue;
-            else return; 
+            else return;
         }
         if (field.suffix && String(value) !== '0' && value) {
              displayValue += field.suffix;
         }
-        // createStatItemHtml is imported from utils.js
         additionalInfoHtmlSegments.push(createStatItemHtml(field.label, displayValue));
     });
     const additionalInfoHtml = additionalInfoHtmlSegments.filter(s => s).join('');
-        
-    const suspensionsHtml = (stats.suspensionsThisYear > 0) 
+
+    const suspensionsHtml = (stats.suspensionsThisYear > 0)
         ? createStatItemHtml(`Ulosajot (${config.CURRENT_YEAR})`, stats.suspensionsThisYear, "bg-gray-50 p-3 rounded-md sm:col-span-2") : '';
-    
+
     const previousSeasonStatsHtml = (stats.gamesPlayedLastSeason > 0 || stats.goalsScoredLastSeason > 0)
         ? `${createStatItemHtml(`Ottelut (${config.PREVIOUS_YEAR})`, stats.gamesPlayedLastSeason)}
            ${createStatItemHtml(`Maalit (${config.PREVIOUS_YEAR})`, stats.goalsScoredLastSeason)}`
@@ -123,7 +117,7 @@ function createPlayerStatCardElement(stats) {
             ${previousSeasonStatsHtml}
         </div>
         ${additionalInfoHtml ? `<div class="mt-4 pt-4 border-t border-gray-200"><h4 class="text-md font-semibold text-gray-700 mb-2">Lisätiedot:</h4><div class="additional-info-grid">${additionalInfoHtml}</div></div>` : ''}
-        ${pastMatchesDisplayHtml} 
+        ${pastMatchesDisplayHtml}
     `;
     return card;
 }
@@ -134,9 +128,9 @@ function createPlayerStatCardElement(stats) {
  * @param {Object|null} groupDataForMatchInfo - Group data for H2H and referee comparison.
  * @param {number} [lineupGoalsA=0] - Total goals from team A's lineup this season.
  * @param {number} [lineupGoalsB=0] - Total goals from team B's lineup this season.
- * @param {HTMLElement} container - The HTML element to display the info in (assumed to be matchInfoContainer).
+ * @param {HTMLElement} container - The HTML element to display the info in.
  */
-function displayMatchInfo(match, groupDataForMatchInfo, lineupGoalsA = 0, lineupGoalsB = 0, container) { 
+function displayMatchInfo(match, groupDataForMatchInfo, lineupGoalsA = 0, lineupGoalsB = 0, container) {
     const teamAName = match.team_A_name || 'Kotijoukkue';
     const teamBName = match.team_B_name || 'Vierasjoukkue';
     const scoreA = match.fs_A !== undefined ? match.fs_A : '-';
@@ -149,7 +143,7 @@ function displayMatchInfo(match, groupDataForMatchInfo, lineupGoalsA = 0, lineup
         teamAStatsInGroup = groupDataForMatchInfo.teams.find(t => t.team_id === match.team_A_id);
         teamBStatsInGroup = groupDataForMatchInfo.teams.find(t => t.team_id === match.team_B_id);
     }
-    
+
     let goalComparisonHtml = '';
     if (teamAStatsInGroup || teamBStatsInGroup || lineupGoalsA > 0 || lineupGoalsB > 0 || (match.lineups && match.lineups.length > 0)) {
         goalComparisonHtml = `
@@ -177,10 +171,10 @@ function displayMatchInfo(match, groupDataForMatchInfo, lineupGoalsA = 0, lineup
         const currentMatchId = match.match_id;
 
         const previousEncounters = groupDataForMatchInfo.matches.filter(m =>
-            m.match_id !== currentMatchId && 
+            m.match_id !== currentMatchId &&
             ((m.team_A_id === teamAId && m.team_B_id === teamBId) || (m.team_A_id === teamBId && m.team_B_id === teamAId)) &&
-            m.status === "Played" 
-        ).sort((a, b) => new Date(`${b.date}T${b.time || '00:00:00'}`) - new Date(`${a.date}T${a.time || '00:00:00'}`)) 
+            m.status === "Played"
+        ).sort((a, b) => new Date(`${b.date}T${b.time || '00:00:00'}`) - new Date(`${a.date}T${a.time || '00:00:00'}`))
          .slice(0, 3);
 
         if (previousEncounters.length > 0) {
@@ -207,7 +201,7 @@ function displayMatchInfo(match, groupDataForMatchInfo, lineupGoalsA = 0, lineup
 
         const getRefereeGamesList = (targetTeamId, targetTeamName) => {
             const games = groupDataForMatchInfo.matches
-                .filter(m => 
+                .filter(m =>
                     m.referee_1_id === currentRefereeId &&
                     (m.team_A_id === targetTeamId || m.team_B_id === targetTeamId) &&
                     m.status === "Played" &&
@@ -225,13 +219,13 @@ function displayMatchInfo(match, groupDataForMatchInfo, lineupGoalsA = 0, lineup
                         if (pastGame.winner_id === targetTeamId) resultIndicatorClass = 'win';
                         else if (pastGame.winner_id === pastGame.team_B_id) resultIndicatorClass = 'loss';
                         else resultIndicatorClass = 'draw';
-                    } else { 
+                    } else {
                         opponentName = pastGame.team_A_name; teamScore = pastGame.fs_B; opponentScore = pastGame.fs_A;
                         if (pastGame.winner_id === targetTeamId) resultIndicatorClass = 'win';
                         else if (pastGame.winner_id === pastGame.team_A_id) resultIndicatorClass = 'loss';
                         else resultIndicatorClass = 'draw';
                     }
-                    if (!pastGame.winner_id || pastGame.winner_id === '-' || pastGame.winner_id === '0') {
+                    if (!pastGame.winner_id || pastGame.winner_id === '-' || pastGame.winner_id === '0' || pastGame.winner_id === '') { // Added empty string check
                         resultIndicatorClass = 'draw';
                     }
                     listHtml += `<li class="referee-past-game-item"><span class="result-indicator ${resultIndicatorClass}"></span> ${pastGame.date}: vs ${opponentName} (${teamScore !== undefined ? teamScore : '-'}-${opponentScore !== undefined ? opponentScore : '-'})</li>`;
@@ -243,15 +237,14 @@ function displayMatchInfo(match, groupDataForMatchInfo, lineupGoalsA = 0, lineup
         };
         refereePastGamesHtml += `<div class="grid grid-cols-1 md:grid-cols-2 gap-x-4 text-center">${getRefereeGamesList(teamAId, teamAName)}${getRefereeGamesList(teamBId, teamBName)}</div>`;
     }
-    
-    // container is expected to be matchInfoContainer from global scope
+
     if (container) {
         container.innerHTML = `
             <h2 class="text-2xl font-semibold text-gray-700 mb-2 text-center">${teamAName} vs ${teamBName}</h2>
             <p class="text-xl text-gray-600 text-center mb-2">Tulos: ${scoreA} - ${scoreB}</p>
             ${goalComparisonHtml}
-            ${headToHeadHtml}    
-            ${refereeInfoHtml} 
+            ${headToHeadHtml}
+            ${refereeInfoHtml}
             ${refereePastGamesHtml}
             <p class="text-sm text-gray-500 text-center mt-3">Päivämäärä: ${match.date || 'N/A'}</p>
             <p class="text-sm text-gray-500 text-center">Sarja: ${match.category_name || 'N/A'} (${match.competition_name || 'N/A'})</p>
@@ -259,15 +252,16 @@ function displayMatchInfo(match, groupDataForMatchInfo, lineupGoalsA = 0, lineup
     }
 }
 
+
 /**
  * Displays group information and standings table.
  * @param {Object} group - The group details object.
  * @param {string} currentMatchTeamAId - ID of team A in the current match.
  * @param {string} currentMatchTeamBId - ID of team B in the current match.
- * @param {HTMLElement} container - The HTML element to display the info in (assumed to be groupInfoContainer).
+ * @param {HTMLElement} container - The HTML element to display the info in.
  */
 function displayGroupInfoAndStandings(group, currentMatchTeamAId, currentMatchTeamBId, container) {
-    if (!container) return; // Guard clause if container is not available
+    if (!container) return;
 
     if (!group || !group.teams || group.teams.length === 0) {
         container.innerHTML = '<p class="text-gray-700 text-center">Sarjataulukkoa ei löytynyt tälle lohkolle.</p>';
@@ -289,15 +283,15 @@ function displayGroupInfoAndStandings(group, currentMatchTeamAId, currentMatchTe
                     <th class="number-col">O</th><th class="number-col">V</th><th class="number-col">T</th><th class="number-col">H</th>
                     <th class="number-col">TM</th><th class="number-col">PM</th><th class="number-col">ME</th><th class="number-col">P</th>
                 </tr></thead><tbody>`;
-    
+
     const sortedTeams = [...group.teams].sort((a, b) => (parseInt(a.current_standing) || 999) - (parseInt(b.current_standing) || 999));
 
     sortedTeams.forEach(team => {
         const isCurrentTeam = team.team_id === currentMatchTeamAId || team.team_id === currentMatchTeamBId;
         tableHtml += `
-            <tr>
+            <tr class="${isCurrentTeam ? 'bg-blue-50 font-semibold' : ''}">
                 <td class="rank">${team.current_standing || '-'}</td>
-                <td class="team-name">${isCurrentTeam ? `<strong>${team.team_name || 'N/A'}</strong>` : (team.team_name || 'N/A')}</td>
+                <td class="team-name">${team.team_name || 'N/A'}</td>
                 <td class="number-col">${team.matches_played || 0}</td><td class="number-col">${team.matches_won || 0}</td>
                 <td class="number-col">${team.matches_tied || 0}</td><td class="number-col">${team.matches_lost || 0}</td>
                 <td class="number-col">${team.goals_for || 0}</td><td class="number-col">${team.goals_against || 0}</td>
@@ -315,24 +309,22 @@ function displayGroupInfoAndStandings(group, currentMatchTeamAId, currentMatchTe
  * @param {Array<Object>} playersInMatch - Array of player lineup info from match details.
  * @param {Object} matchDetails - The full details of the current match.
  * @param {Object|null} groupDataForInfo - Group data for context.
- * @param {HTMLElement} playerStatsContainerGlobal - The HTML element to append player cards to (assumed to be playerStatsContainer).
- * @param {HTMLElement} matchInfoContainerGlobal - The HTML element for match info (assumed to be matchInfoContainer).
+ * @param {HTMLElement} playerStatsContainerGlobal - The HTML element to append player cards to.
+ * @param {HTMLElement} matchInfoContainerGlobal - The HTML element for match info.
  * @returns {Promise<{lineupPlayerIds: string[], teamAName: string, teamBName: string}>} Player IDs and team names.
  */
 async function processAndDisplayPlayerStats(playersInMatch, matchDetails, groupDataForInfo, playerStatsContainerGlobal, matchInfoContainerGlobal) {
     const teamAName = matchDetails.team_A_name || 'Kotijoukkue';
     const teamBName = matchDetails.team_B_name || 'Vierasjoukkue';
 
-    if (!playerStatsContainerGlobal) return { lineupPlayerIds: [], teamAName, teamBName }; // Guard clause
+    if (!playerStatsContainerGlobal) return { lineupPlayerIds: [], teamAName, teamBName };
 
     if (!playersInMatch || playersInMatch.length === 0) {
         playerStatsContainerGlobal.innerHTML = '<p class="text-gray-700 text-center">Ottelulle ei löytynyt pelaajatietoja kokoonpanosta.</p>';
-        // displayMatchInfo is defined in this file.
         displayMatchInfo(matchDetails, groupDataForInfo, 0, 0, matchInfoContainerGlobal);
         return { lineupPlayerIds: [], teamAName, teamBName };
     }
 
-    // fetchAndProcessPlayerData is imported from dataProcessor.js
     const playerPromises = playersInMatch.map(playerLineupInfo =>
         fetchAndProcessPlayerData(playerLineupInfo.player_id, playerLineupInfo.team_id, matchDetails, playerLineupInfo)
     );
@@ -352,7 +344,7 @@ async function processAndDisplayPlayerStats(playersInMatch, matchDetails, groupD
 
     displayMatchInfo(matchDetails, groupDataForInfo, totalLineupGoalsTeamA, totalLineupGoalsTeamB, matchInfoContainerGlobal);
 
-    allPlayerStats.sort((a, b) => { 
+    allPlayerStats.sort((a, b) => {
         const getTeamSortOrder = (teamId) => (teamId === matchDetails.team_A_id ? 1 : (teamId === matchDetails.team_B_id ? 2 : 3));
         const teamOrderA = getTeamSortOrder(a.teamIdInMatch);
         const teamOrderB = getTeamSortOrder(b.teamIdInMatch);
@@ -368,7 +360,7 @@ async function processAndDisplayPlayerStats(playersInMatch, matchDetails, groupD
     if (allPlayerStats.length === 0) {
         playerStatsContainerGlobal.innerHTML = '<p class="text-gray-700 text-center">Pelaajien tilastojen haku epäonnistui kaikille kokoonpanon pelaajille.</p>';
     } else {
-        playerStatsContainerGlobal.innerHTML = ''; 
+        playerStatsContainerGlobal.innerHTML = '';
         let currentTeamIdDisplayed = null;
         allPlayerStats.forEach(playerFullStats => {
             if (playerFullStats.teamIdInMatch !== currentTeamIdDisplayed) {
@@ -378,7 +370,6 @@ async function processAndDisplayPlayerStats(playersInMatch, matchDetails, groupD
                 teamHeader.textContent = currentTeamIdDisplayed === matchDetails.team_A_id ? teamAName : (currentTeamIdDisplayed === matchDetails.team_B_id ? teamBName : `Joukkue ID: ${currentTeamIdDisplayed}`);
                 playerStatsContainerGlobal.appendChild(teamHeader);
             }
-            // displayPlayerStats is defined in this file.
             displayPlayerStats(playerFullStats, playerStatsContainerGlobal);
         });
     }
@@ -390,9 +381,8 @@ async function processAndDisplayPlayerStats(playersInMatch, matchDetails, groupD
  * @param {Object} stats - The player's statistics object.
  * @param {HTMLElement} container - The HTML element to append the card to.
  */
-function displayPlayerStats(stats, container) { 
-    if (!container) return; // Guard clause
-    // createPlayerStatCardElement is defined in this file.
+function displayPlayerStats(stats, container) {
+    if (!container) return;
     const cardElement = createPlayerStatCardElement(stats);
     container.appendChild(cardElement);
 }
@@ -403,23 +393,23 @@ function displayPlayerStats(stats, container) {
  * @param {Array<string>} matchLineupPlayerIds - Array of player IDs who are in the match lineup.
  * @param {string} teamDisplayName - The display name of the team.
  * @param {Object} originalMatchDetails - The original match details for context.
- * @param {HTMLElement} container - The HTML element to append player cards to (assumed to be playersNotInLineupContainer).
+ * @param {HTMLElement} container - The HTML element to append player cards to.
  */
 async function displayPlayersNotInLineup(teamDetails, matchLineupPlayerIds, teamDisplayName, originalMatchDetails, container) {
-    if (!container) return; // Guard clause
+    if (!container) return;
 
     if (!teamDetails || !teamDetails.players || teamDetails.players.length === 0) {
-        return; 
+        return;
     }
 
-    const playersNotInMatch = teamDetails.players.filter(player => 
+    const playersNotInMatch = teamDetails.players.filter(player =>
         player.player_id && !matchLineupPlayerIds.includes(player.player_id.toString()) && player.inactive !== "1"
     );
 
     if (playersNotInMatch.length > 0) {
         const sectionDiv = document.createElement('div');
         sectionDiv.className = 'mt-8 p-6 bg-gray-100 rounded-lg shadow-inner';
-        
+
         const header = document.createElement('h3');
         header.className = 'text-xl font-semibold text-gray-800 mb-4 border-b pb-2';
         header.textContent = `Muut joukkueen pelaajat (${teamDisplayName})`;
@@ -427,12 +417,11 @@ async function displayPlayersNotInLineup(teamDetails, matchLineupPlayerIds, team
 
         const cardsContainer = document.createElement('div');
         cardsContainer.className = 'space-y-6';
-        
+
         playersNotInMatch.sort((a,b) => (a.last_name || '').localeCompare(b.last_name || '') || (a.first_name || '').localeCompare(b.first_name || ''));
 
-        // fetchAndProcessPlayerData is imported from dataProcessor.js
         const playerStatPromises = playersNotInMatch.map(async (playerFromTeam) => {
-            const playerLineupInfo = { 
+            const playerLineupInfo = {
                 player_id: playerFromTeam.player_id,
                 player_name: `${playerFromTeam.first_name || ''} ${playerFromTeam.last_name || ''}`.trim() || `Pelaaja ID: ${playerFromTeam.player_id}`,
                 shirt_number: playerFromTeam.shirt_number || 'N/A',
@@ -447,11 +436,10 @@ async function displayPlayersNotInLineup(teamDetails, matchLineupPlayerIds, team
 
         if (resolvedPlayerStatsArray.length > 0) {
             resolvedPlayerStatsArray.forEach(stats => {
-                // displayPlayerStats is defined in this file.
                 displayPlayerStats(stats, cardsContainer);
             });
             sectionDiv.appendChild(cardsContainer);
-        } else if (playersNotInMatch.length > 0) { 
+        } else if (playersNotInMatch.length > 0) {
             const noPlayersMsg = document.createElement('p');
             noPlayersMsg.className = 'text-gray-600';
             noPlayersMsg.textContent = 'Ei muita pelaajia näytettäväksi tälle joukkueelle (tilastojen haku saattoi epäonnistua).';
@@ -461,11 +449,96 @@ async function displayPlayersNotInLineup(teamDetails, matchLineupPlayerIds, team
     }
 }
 
-export { 
-    createPlayerStatCardElement, 
-    displayMatchInfo, 
-    displayGroupInfoAndStandings, 
-    processAndDisplayPlayerStats, 
-    displayPlayerStats, 
-    displayPlayersNotInLineup 
+/**
+ * Displays recent and upcoming matches for a team in a dedicated section.
+ * @param {string} teamId - The ID of the team.
+ * @param {string} teamName - The display name of the team.
+ * @param {Array<Object>|null} allMatchesForTeam - Array of all matches fetched for the team, or null if fetch failed.
+ * @param {string} currentMatchDateStr - The date of the currently viewed match (YYYY-MM-DD).
+ * @param {string} currentMatchId - The ID of the currently viewed match, to exclude it.
+ * @param {HTMLElement} parentContainer - The main container where team sections will be added.
+ */
+function displayTeamRecentAndUpcomingMatches(teamId, teamName, allMatchesForTeam, currentMatchDateStr, currentMatchId, parentContainer) {
+    // Create a unique ID for this team's section to manage its content
+    const teamSectionId = `team-${teamId}-matches-info`;
+    let teamSectionContainer = parentContainer.querySelector(`#${teamSectionId}`);
+
+    // If the section doesn't exist, create it
+    if (!teamSectionContainer) {
+        teamSectionContainer = document.createElement('div');
+        teamSectionContainer.id = teamSectionId;
+        teamSectionContainer.className = 'p-4 bg-white rounded-lg shadow mb-4'; // Added margin for spacing
+        parentContainer.appendChild(teamSectionContainer);
+    }
+    teamSectionContainer.innerHTML = ''; // Clear previous content for this specific team section before adding new
+
+    const teamHeader = document.createElement('h4');
+    teamHeader.className = 'text-xl font-semibold text-gray-800 mb-3 pb-2 border-b border-gray-300';
+    teamHeader.textContent = teamName;
+    teamSectionContainer.appendChild(teamHeader);
+
+    if (!allMatchesForTeam || allMatchesForTeam.length === 0) {
+        const noDataP = document.createElement('p');
+        noDataP.className = 'text-gray-600 text-sm';
+        noDataP.textContent = `Ei ottelutietoja saatavilla joukkueelle ${teamName}.`;
+        teamSectionContainer.appendChild(noDataP);
+        return;
+    }
+
+    const currentMatchDate = new Date(currentMatchDateStr + "T00:00:00Z"); // Use UTC to avoid timezone issues in date comparisons
+
+    const playedMatches = allMatchesForTeam
+        .filter(m => m.status === 'Played' && m.match_id !== currentMatchId && new Date(m.date + `T${m.time || '00:00:00'}Z`) < currentMatchDate)
+        .sort((a, b) => new Date(b.date + `T${b.time || '00:00:00'}Z`) - new Date(a.date + `T${a.time || '00:00:00'}Z`))
+        .slice(0, 3)
+        .reverse(); // Reverse to show oldest of the three first
+
+    const upcomingMatches = allMatchesForTeam
+        .filter(m => m.status === 'Fixture' && m.match_id !== currentMatchId && new Date(m.date + `T${m.time || '00:00:00'}Z`) >= currentMatchDate)
+        .sort((a, b) => new Date(a.date + `T${a.time || '00:00:00'}Z`) - new Date(b.date + `T${b.time || '00:00:00'}Z`))
+        .slice(0, 3);
+
+    const createMatchListHtml = (title, matches, isPlayedList) => {
+        let listHtml = `<h5 class="text-md font-semibold text-gray-700 mt-3 mb-1">${title}:</h5>`;
+        if (matches.length > 0) {
+            listHtml += `<ul class="list-none pl-0 space-y-1 text-sm">`;
+            matches.forEach(match => {
+                const isHomeTeam = match.team_A_id === teamId;
+                const homeTeamName = match.team_A_name;
+                const awayTeamName = match.team_B_name;
+                const homeScore = match.fs_A !== undefined ? match.fs_A : '-';
+                const awayScore = match.fs_B !== undefined ? match.fs_B : '-';
+
+                let displayString = `<span class="font-medium">${match.date}</span> `;
+                if (!isPlayedList && match.time) {
+                     displayString += `${match.time.substring(0,5)} `;
+                }
+                displayString += `: ${homeTeamName} vs ${awayTeamName} `;
+                if (isPlayedList) {
+                    displayString += `(<span class="font-semibold">${homeScore}-${awayScore}</span>)`;
+                } else {
+                    displayString += `(${match.venue_name || 'Paikka tuntematon'})`;
+                }
+                listHtml += `<li class="py-1 border-b border-gray-200 last:border-b-0">${displayString}</li>`;
+            });
+            listHtml += `</ul>`;
+        } else {
+            listHtml += `<p class="text-sm text-gray-500">Ei ${isPlayedList ? 'aiempia pelattuja' : 'tulevia'} otteluita näytettäväksi.</p>`;
+        }
+        return listHtml;
+    };
+
+    teamSectionContainer.innerHTML += createMatchListHtml('Edelliset 3 Ottelua', playedMatches, true);
+    teamSectionContainer.innerHTML += createMatchListHtml('Seuraavat 3 Ottelua', upcomingMatches, false);
+}
+
+
+export {
+    createPlayerStatCardElement,
+    displayMatchInfo,
+    displayGroupInfoAndStandings,
+    processAndDisplayPlayerStats,
+    displayPlayerStats,
+    displayPlayersNotInLineup,
+    displayTeamRecentAndUpcomingMatches // New export
 };
