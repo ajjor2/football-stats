@@ -1,3 +1,11 @@
+// Import rate limiting utilities if in a module environment
+let throttle, createRateLimiter;
+if (typeof require !== 'undefined') {
+    const utils = require('./utils');
+    throttle = utils.throttle;
+    createRateLimiter = utils.createRateLimiter;
+}
+
 // DOM Element Constants - Initialize only in browser environment
 let matchIdInput, fetchDataButton, playerStatsContainer, matchInfoContainer, 
     groupInfoContainer, playersNotInLineupContainer, loadingIndicator, errorMessageContainer;
@@ -11,6 +19,50 @@ if (typeof window !== 'undefined' && typeof document !== 'undefined') {
     playersNotInLineupContainer = document.getElementById('playersNotInLineupContainer');
     loadingIndicator = document.getElementById('loadingIndicator');
     errorMessageContainer = document.getElementById('errorMessage');
+    
+    // Define rate limiting utilities in browser environment if not imported
+    if (typeof throttle === 'undefined') {
+        throttle = function(func, limit) {
+            let inThrottle = false;
+            let lastResult = null;
+            
+            return function(...args) {
+                if (!inThrottle) {
+                    inThrottle = true;
+                    lastResult = func.apply(this, args);
+                    
+                    setTimeout(() => {
+                        inThrottle = false;
+                    }, limit);
+                }
+                
+                return lastResult;
+            };
+        };
+    }
+    
+    if (typeof createRateLimiter === 'undefined') {
+        createRateLimiter = function(maxCalls, timeWindow) {
+            const calls = [];
+            
+            return function() {
+                const now = Date.now();
+                
+                // Remove calls outside the time window
+                while (calls.length > 0 && calls[0] < now - timeWindow) {
+                    calls.shift();
+                }
+                
+                // Check if we're under the limit
+                if (calls.length < maxCalls) {
+                    calls.push(now);
+                    return true;
+                }
+                
+                return false;
+            };
+        };
+    }
 }
 
 // Configuration
@@ -23,17 +75,64 @@ const config = {
     },
     NO_PLAYER_IMAGE_URL: "https://www.palloliitto.fi/sites/all/themes/palloliitto/images/no-player-image.png",
     DEFAULT_CREST_URL: "https://cdn.torneopal.net/logo/palloliitto/x.png",
-    PLACEHOLDER_CREST_URL: 'https://placehold.co/40x40/e2e8f0/64748b?text=LOGO'
+    PLACEHOLDER_CREST_URL: 'https://placehold.co/40x40/e2e8f0/64748b?text=LOGO',
+    // Rate limiting configuration
+    RATE_LIMIT: {
+        MAX_CALLS_PER_MINUTE: 30,  // Maximum API calls per minute
+        MAX_CALLS_PER_ENDPOINT: {   // Endpoint-specific limits
+            'getMatch': 5,
+            'getGroup': 3,
+            'getTeam': 5,
+            'getPlayer': 20
+        },
+        THROTTLE_DELAY: 1000        // Minimum delay between API calls in milliseconds
+    }
 };
 
+// Initialize rate limiters
+const globalRateLimiter = createRateLimiter(
+    config.RATE_LIMIT.MAX_CALLS_PER_MINUTE, 
+    60 * 1000 // 1 minute in milliseconds
+);
+
+// Create endpoint-specific rate limiters
+const endpointRateLimiters = {};
+Object.keys(config.RATE_LIMIT.MAX_CALLS_PER_ENDPOINT).forEach(endpoint => {
+    endpointRateLimiters[endpoint] = createRateLimiter(
+        config.RATE_LIMIT.MAX_CALLS_PER_ENDPOINT[endpoint],
+        60 * 1000 // 1 minute in milliseconds
+    );
+});
+
 /**
- * Fetches data from the API.
+ * Fetches data from the API with rate limiting.
  * @param {string} endpoint - The API endpoint (e.g., 'getMatch').
  * @param {Object} params - Query parameters for the API call.
  * @returns {Promise<Object>} - The JSON response data.
- * @throws {Error} - If the API call fails or returns an error status.
+ * @throws {Error} - If the API call fails, returns an error status, or rate limit is exceeded.
  */
 async function fetchAPIData(endpoint, params = {}) {
+    // Skip rate limiting in test environments
+    const isTestEnvironment = typeof process !== 'undefined' && 
+                             process.env.NODE_ENV === 'test';
+    
+    if (!isTestEnvironment) {
+        // Check global rate limit
+        if (!globalRateLimiter()) {
+            throw new Error(`Rate limit exceeded. Please try again in a moment.`);
+        }
+        
+        // Check endpoint-specific rate limit
+        if (endpointRateLimiters[endpoint] && !endpointRateLimiters[endpoint]()) {
+            throw new Error(`Too many requests to ${endpoint}. Please try again in a moment.`);
+        }
+        
+        // Apply throttling delay if configured
+        if (config.RATE_LIMIT.THROTTLE_DELAY > 0) {
+            await new Promise(resolve => setTimeout(resolve, config.RATE_LIMIT.THROTTLE_DELAY));
+        }
+    }
+    
     const queryParams = new URLSearchParams(params).toString();
     const url = `${config.API_BASE_URL}${endpoint}?${queryParams}`;
     
