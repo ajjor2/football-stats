@@ -8,7 +8,8 @@ import {
     processAndDisplayPlayerStats,
     displayPlayersNotInLineup,
     displayMatchInfo, // Used to initially display match info before player stats are fully processed
-    displayTeamRecentAndUpcomingMatches
+    displayTeamRecentAndUpcomingMatches,
+    displayHeadToHeadMatchesCurrentYear // New import
 } from './js/uiManager.js';
 
 // DOM Element Constants
@@ -130,7 +131,7 @@ async function loadMatchData() {
 }
 
 /**
- * Fetches and displays more detailed match info (past/future games for teams).
+ * Fetches and displays more detailed match info (past/future games for teams and H2H).
  */
 async function loadMoreTeamInfo() {
     if (!currentMatchDetails) {
@@ -152,7 +153,7 @@ async function loadMoreTeamInfo() {
         return;
     }
 
-    // If not fetched yet, or if it was hidden and cleared (moreInfoFetched would be false)
+    // If not fetched yet
     showMoreInfoButton.textContent = 'Ladataan...';
     showMoreInfoButton.disabled = true;
     moreMatchInfoContainer.innerHTML = '<div class="loader my-4"></div>'; // Centered loader
@@ -163,33 +164,42 @@ async function loadMoreTeamInfo() {
         const teamBId = currentMatchDetails.team_B_id;
         const teamAName = currentMatchDetails.team_A_name || `Joukkue ${teamAId}`;
         const teamBName = currentMatchDetails.team_B_name || `Joukkue ${teamBId}`;
-        const matchDate = currentMatchDetails.date;
-        const currentYear = config.CURRENT_YEAR; // Use config for current year
-        const startDate = `${currentYear}-01-01`;
+        const matchDate = currentMatchDetails.date; // Date of the current match
+        const currentYear = config.CURRENT_YEAR;
+        const startDate = `${currentYear}-01-01`; // Fetch all matches from the beginning of the current year
 
+        // Fetch all matches for both teams for the current year
         const [matchesTeamA, matchesTeamB] = await Promise.all([
             fetchTeamMatches(teamAId, startDate),
             fetchTeamMatches(teamBId, startDate)
         ]);
 
-        moreMatchInfoContainer.innerHTML = ''; // Clear loader
+        moreMatchInfoContainer.innerHTML = ''; // Clear loader before adding new content
 
+        // Display Head-to-Head matches first
+        if (typeof displayHeadToHeadMatchesCurrentYear === 'function') {
+            // Pass matchesTeamA (or B, either should contain H2H if they exist)
+            // and IDs/names for both teams.
+            displayHeadToHeadMatchesCurrentYear(matchesTeamA, teamAId, teamBId, teamAName, teamBName, currentMatchDetails.match_id, moreMatchInfoContainer);
+        }
+
+        // Display recent and upcoming for Team A
         if (typeof displayTeamRecentAndUpcomingMatches === 'function') {
             displayTeamRecentAndUpcomingMatches(teamAId, teamAName, matchesTeamA, matchDate, currentMatchDetails.match_id, moreMatchInfoContainer);
-            displayTeamRecentAndUpcomingMatches(teamBId, teamBName, matchesTeamB, matchDate, currentMatchDetails.match_id, moreMatchInfoContainer);
-            moreInfoFetched = true;
-            showMoreInfoButton.textContent = 'Piilota Lisätiedot';
-        } else {
-            moreMatchInfoContainer.innerHTML = '<p class="text-red-500 text-center">Virhe: Ottelulistan näyttöfunktio puuttuu.</p>';
-            showMoreInfoButton.textContent = 'Lisätietoja Joukkueista';
-            moreInfoFetched = false;
         }
+        // Display recent and upcoming for Team B
+        if (typeof displayTeamRecentAndUpcomingMatches === 'function') {
+            displayTeamRecentAndUpcomingMatches(teamBId, teamBName, matchesTeamB, matchDate, currentMatchDetails.match_id, moreMatchInfoContainer);
+        }
+        
+        moreInfoFetched = true;
+        showMoreInfoButton.textContent = 'Piilota Lisätiedot';
 
     } catch (error) {
         console.error("Error fetching more team info:", error);
         moreMatchInfoContainer.innerHTML = `<p class="text-red-500 text-center">Virhe haettaessa lisätietoja: ${error.message}</p>`;
-        showMoreInfoButton.textContent = 'Yritä Uudelleen'; // Or revert
-        moreInfoFetched = false;
+        showMoreInfoButton.textContent = 'Yritä Uudelleen';
+        moreInfoFetched = false; // Reset as fetch failed
     } finally {
         showMoreInfoButton.disabled = false;
     }
