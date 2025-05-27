@@ -11,12 +11,12 @@ const config = {
     PLACEHOLDER_CREST_URL: 'https://placehold.co/40x40/e2e8f0/64748b?text=LOGO',
     // Rate limiting configuration
     RATE_LIMIT: {
-        MAX_CALLS_PER_MINUTE: 30,  // Maximum API calls per minute
+        MAX_CALLS_PER_MINUTE: 60,  // Maximum API calls per minute
         MAX_CALLS_PER_ENDPOINT: {   // Endpoint-specific limits
             'getMatch': 5,
             'getGroup': 3,
             'getTeam': 5,
-            'getPlayer': 20
+            'getPlayer': 50
         },
         THROTTLE_DELAY: 1000        // Minimum delay between API calls in milliseconds
     }
