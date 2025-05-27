@@ -2,26 +2,26 @@
 import { config } from './js/config.js';
 import { clearPreviousData, showLoading, displayError } from './js/utils.js';
 import { fetchMatchDetails, fetchGroupDetails, fetchTeamData, fetchTeamMatches } from './js/apiService.js';
-import { processPlayerMatchHistory } from './js/dataProcessor.js'; // Used by fetchAndProcessPlayerData
-import {
+import { processPlayerMatchHistory } from './js/dataProcessor.js';
+import { // Varmistetaan, että kaikki importit ovat tässä
+    createPlayerStatCardElement, // Ei välttämättä käytetä suoraan script.js:ssä, mutta hyvä olla jos tarvitaan
+    displayMatchInfo,
     displayGroupInfoAndStandings,
     processAndDisplayPlayerStats,
+    displayPlayerStats, // Ei välttämättä käytetä suoraan script.js:ssä
     displayPlayersNotInLineup,
-    displayMatchInfo, // Used to initially display match info before player stats are fully processed
     displayTeamRecentAndUpcomingMatches,
-    displayHeadToHeadMatchesCurrentYear // New import
+    displayHeadToHeadMatchesCurrentYear
 } from './js/uiManager.js';
 
 // DOM Element Constants
 let matchIdInput, fetchDataButton, playerStatsContainer, matchInfoContainer,
     groupInfoContainer, playersNotInLineupContainer, loadingIndicator, errorMessageContainer,
-    showMoreInfoButton, moreMatchInfoContainer; // New elements
+    showMoreInfoButton, moreMatchInfoContainer;
 
-// Store current match details for the "More Info" button
 let currentMatchDetails = null;
-let moreInfoFetched = false; // To track if more info has been fetched to avoid re-fetch on simple toggle
+let moreInfoFetched = false;
 
-// Initialize DOM elements once the DOM is ready
 function initializeDOMElements() {
     matchIdInput = document.getElementById('matchIdInput');
     fetchDataButton = document.getElementById('fetchDataButton');
@@ -35,15 +35,10 @@ function initializeDOMElements() {
     moreMatchInfoContainer = document.getElementById('moreMatchInfoContainer');
 }
 
-
-/**
- * Clears all previously displayed data from the UI, including the "More Info" section.
- */
 function clearAllUIData() {
-    if (typeof clearPreviousData === 'function') { // Ensure imported util is available
-        clearPreviousData(); // This should handle basic containers
+    if (typeof clearPreviousData === 'function') {
+        clearPreviousData();
     }
-    // Explicitly handle new elements
     if (showMoreInfoButton) {
         showMoreInfoButton.classList.add('hidden');
         showMoreInfoButton.textContent = 'Lisätietoja Joukkueista';
@@ -57,10 +52,6 @@ function clearAllUIData() {
     moreInfoFetched = false;
 }
 
-
-/**
- * Main function to orchestrate fetching and displaying all data for a match.
- */
 async function loadMatchData() {
     if (!matchIdInput) {
         console.error("matchIdInput is not initialized.");
@@ -73,25 +64,23 @@ async function loadMatchData() {
         return;
     }
 
-    clearAllUIData(); // Use the comprehensive clear function
+    clearAllUIData();
     showLoading(true);
-    // displayError(""); // clearAllUIData should handle this
 
     try {
         const matchDetailsResponse = await fetchMatchDetails(matchId);
         if (!matchDetailsResponse) {
-            showLoading(false); // Ensure loading is hidden if match details fetch fails
+            showLoading(false);
             return;
         }
         currentMatchDetails = matchDetailsResponse;
 
-        // Initial display of match info (without lineup goals yet)
         if (typeof displayMatchInfo === 'function' && matchInfoContainer) {
              displayMatchInfo(currentMatchDetails, null, 0, 0, matchInfoContainer);
         }
 
         const groupDataForInfo = await fetchGroupDetails(currentMatchDetails);
-        if (groupDataForInfo && typeof displayGroupInfoAndStandings === 'function' && groupInfoContainer) {
+        if (typeof displayGroupInfoAndStandings === 'function' && groupDataForInfo && groupInfoContainer) { // Tarkistettu displayGroupInfoAndStandings
             displayGroupInfoAndStandings(groupDataForInfo, currentMatchDetails.team_A_id, currentMatchDetails.team_B_id, groupInfoContainer);
         }
 
@@ -99,9 +88,9 @@ async function loadMatchData() {
             const { lineupPlayerIds, teamAName, teamBName } = await processAndDisplayPlayerStats(
                 currentMatchDetails.lineups,
                 currentMatchDetails,
-                groupDataForInfo, // Pass groupData here for H2H and referee context in displayMatchInfo
+                groupDataForInfo,
                 playerStatsContainer,
-                matchInfoContainer // This will re-render matchInfo with lineup goals
+                matchInfoContainer
             );
 
             const [teamAData, teamBData] = await Promise.all([
@@ -109,15 +98,14 @@ async function loadMatchData() {
                 fetchTeamData(currentMatchDetails.team_B_id)
             ]);
 
-            if (teamAData && teamAData.team && typeof displayPlayersNotInLineup === 'function' && playersNotInLineupContainer) {
+            if (typeof displayPlayersNotInLineup === 'function' && teamAData && teamAData.team && playersNotInLineupContainer) {
                 await displayPlayersNotInLineup(teamAData.team, lineupPlayerIds, teamAName, currentMatchDetails, playersNotInLineupContainer);
             }
-            if (teamBData && teamBData.team && typeof displayPlayersNotInLineup === 'function' && playersNotInLineupContainer) {
+            if (typeof displayPlayersNotInLineup === 'function' && teamBData && teamBData.team && playersNotInLineupContainer) {
                 await displayPlayersNotInLineup(teamBData.team, lineupPlayerIds, teamBName, currentMatchDetails, playersNotInLineupContainer);
             }
         }
 
-        // Show the "Lisätietoja" button now that main data is loaded
         if (showMoreInfoButton) {
             showMoreInfoButton.classList.remove('hidden');
         }
@@ -130,9 +118,6 @@ async function loadMatchData() {
     }
 }
 
-/**
- * Fetches and displays more detailed match info (past/future games for teams and H2H).
- */
 async function loadMoreTeamInfo() {
     if (!currentMatchDetails) {
         if (typeof displayError === 'function') displayError("Pääottelun tiedot puuttuvat. Lataa ottelu ensin.");
@@ -140,23 +125,20 @@ async function loadMoreTeamInfo() {
     }
     if (!moreMatchInfoContainer || !showMoreInfoButton) return;
 
-    // If already fetched and visible, just hide it
     if (!moreMatchInfoContainer.classList.contains('hidden') && moreInfoFetched) {
         moreMatchInfoContainer.classList.add('hidden');
         showMoreInfoButton.textContent = 'Lisätietoja Joukkueista';
         return;
     }
-    // If hidden but already fetched, just show it
     if (moreMatchInfoContainer.classList.contains('hidden') && moreInfoFetched) {
         moreMatchInfoContainer.classList.remove('hidden');
         showMoreInfoButton.textContent = 'Piilota Lisätiedot';
         return;
     }
 
-    // If not fetched yet
     showMoreInfoButton.textContent = 'Ladataan...';
     showMoreInfoButton.disabled = true;
-    moreMatchInfoContainer.innerHTML = '<div class="loader my-4"></div>'; // Centered loader
+    moreMatchInfoContainer.innerHTML = '<div class="loader my-4"></div>';
     moreMatchInfoContainer.classList.remove('hidden');
 
     try {
@@ -164,31 +146,23 @@ async function loadMoreTeamInfo() {
         const teamBId = currentMatchDetails.team_B_id;
         const teamAName = currentMatchDetails.team_A_name || `Joukkue ${teamAId}`;
         const teamBName = currentMatchDetails.team_B_name || `Joukkue ${teamBId}`;
-        const matchDate = currentMatchDetails.date; // Date of the current match
+        const matchDate = currentMatchDetails.date;
         const currentYear = config.CURRENT_YEAR;
-        const startDate = `${currentYear}-01-01`; // Fetch all matches from the beginning of the current year
+        const startDate = `${currentYear}-01-01`;
 
-        // Fetch all matches for both teams for the current year
         const [matchesTeamA, matchesTeamB] = await Promise.all([
             fetchTeamMatches(teamAId, startDate),
             fetchTeamMatches(teamBId, startDate)
         ]);
 
-        moreMatchInfoContainer.innerHTML = ''; // Clear loader before adding new content
+        moreMatchInfoContainer.innerHTML = '';
 
-        // Display Head-to-Head matches first
         if (typeof displayHeadToHeadMatchesCurrentYear === 'function') {
-            // Pass matchesTeamA (or B, either should contain H2H if they exist)
-            // and IDs/names for both teams.
             displayHeadToHeadMatchesCurrentYear(matchesTeamA, teamAId, teamBId, teamAName, teamBName, currentMatchDetails.match_id, moreMatchInfoContainer);
         }
 
-        // Display recent and upcoming for Team A
         if (typeof displayTeamRecentAndUpcomingMatches === 'function') {
             displayTeamRecentAndUpcomingMatches(teamAId, teamAName, matchesTeamA, matchDate, currentMatchDetails.match_id, moreMatchInfoContainer);
-        }
-        // Display recent and upcoming for Team B
-        if (typeof displayTeamRecentAndUpcomingMatches === 'function') {
             displayTeamRecentAndUpcomingMatches(teamBId, teamBName, matchesTeamB, matchDate, currentMatchDetails.match_id, moreMatchInfoContainer);
         }
         
@@ -199,17 +173,15 @@ async function loadMoreTeamInfo() {
         console.error("Error fetching more team info:", error);
         moreMatchInfoContainer.innerHTML = `<p class="text-red-500 text-center">Virhe haettaessa lisätietoja: ${error.message}</p>`;
         showMoreInfoButton.textContent = 'Yritä Uudelleen';
-        moreInfoFetched = false; // Reset as fetch failed
+        moreInfoFetched = false;
     } finally {
         showMoreInfoButton.disabled = false;
     }
 }
 
-
-// --- Event Listeners ---
 if (typeof window !== 'undefined' && typeof document !== 'undefined') {
     document.addEventListener('DOMContentLoaded', () => {
-        initializeDOMElements(); // Initialize DOM elements after DOM is loaded
+        initializeDOMElements();
 
         if (fetchDataButton) {
             fetchDataButton.addEventListener('click', loadMatchData);
@@ -230,7 +202,7 @@ if (typeof window !== 'undefined' && typeof document !== 'undefined') {
             if (matchIdInput) {
                 matchIdInput.value = matchIdFromQuery;
                 if (typeof loadMatchData === 'function') {
-                    loadMatchData(); // Automatically load data if matchid is in URL
+                    loadMatchData();
                 } else {
                     console.error("loadMatchData function not available on DOMContentLoaded for query param.");
                 }
@@ -241,5 +213,4 @@ if (typeof window !== 'undefined' && typeof document !== 'undefined') {
     });
 }
 
-// Re-exporting for testing purposes or other consumers (if any)
 export { processPlayerMatchHistory, config };
