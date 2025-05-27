@@ -11,7 +11,8 @@ import { // Varmistetaan, että kaikki importit ovat tässä
     displayPlayerStats, // Ei välttämättä käytetä suoraan script.js:ssä
     displayPlayersNotInLineup,
     displayTeamRecentAndUpcomingMatches,
-    displayHeadToHeadMatchesCurrentYear
+    displayHeadToHeadMatchesCurrentYear,
+    displayRefereeInfoAndPastGames // Uusi import
 } from './js/uiManager.js';
 
 // DOM Element Constants
@@ -20,6 +21,7 @@ let matchIdInput, fetchDataButton, playerStatsContainer, matchInfoContainer,
     showMoreInfoButton, moreMatchInfoContainer;
 
 let currentMatchDetails = null;
+let currentGroupDataForInfo = null; // Tallenna groupData tänne
 let moreInfoFetched = false;
 
 function initializeDOMElements() {
@@ -49,6 +51,7 @@ function clearAllUIData() {
         moreMatchInfoContainer.classList.add('hidden');
     }
     currentMatchDetails = null;
+    currentGroupDataForInfo = null; // Nollaa myös groupData
     moreInfoFetched = false;
 }
 
@@ -75,20 +78,22 @@ async function loadMatchData() {
         }
         currentMatchDetails = matchDetailsResponse;
 
+        // Haetaan groupData ja tallennetaan se
+        currentGroupDataForInfo = await fetchGroupDetails(currentMatchDetails);
+
         if (typeof displayMatchInfo === 'function' && matchInfoContainer) {
-             displayMatchInfo(currentMatchDetails, null, 0, 0, matchInfoContainer);
+             displayMatchInfo(currentMatchDetails, currentGroupDataForInfo, 0, 0, matchInfoContainer);
         }
 
-        const groupDataForInfo = await fetchGroupDetails(currentMatchDetails);
-        if (typeof displayGroupInfoAndStandings === 'function' && groupDataForInfo && groupInfoContainer) { // Tarkistettu displayGroupInfoAndStandings
-            displayGroupInfoAndStandings(groupDataForInfo, currentMatchDetails.team_A_id, currentMatchDetails.team_B_id, groupInfoContainer);
+        if (typeof displayGroupInfoAndStandings === 'function' && currentGroupDataForInfo && groupInfoContainer) { // Tarkistettu displayGroupInfoAndStandings
+            displayGroupInfoAndStandings(currentGroupDataForInfo, currentMatchDetails.team_A_id, currentMatchDetails.team_B_id, groupInfoContainer);
         }
 
         if (typeof processAndDisplayPlayerStats === 'function' && playerStatsContainer && matchInfoContainer) {
             const { lineupPlayerIds, teamAName, teamBName } = await processAndDisplayPlayerStats(
                 currentMatchDetails.lineups,
                 currentMatchDetails,
-                groupDataForInfo,
+                currentGroupDataForInfo, // Käytä tallennettua groupDataa
                 playerStatsContainer,
                 matchInfoContainer
             );
@@ -149,6 +154,9 @@ async function loadMoreTeamInfo() {
         const matchDate = currentMatchDetails.date;
         const currentYear = config.CURRENT_YEAR;
         const startDate = `${currentYear}-01-01`;
+        const refereeId = currentMatchDetails.referee_1_id;
+        const refereeName = currentMatchDetails.referee_1_name;
+
 
         const [matchesTeamA, matchesTeamB] = await Promise.all([
             fetchTeamMatches(teamAId, startDate),
@@ -160,6 +168,12 @@ async function loadMoreTeamInfo() {
         if (typeof displayHeadToHeadMatchesCurrentYear === 'function') {
             displayHeadToHeadMatchesCurrentYear(matchesTeamA, teamAId, teamBId, teamAName, teamBName, currentMatchDetails.match_id, moreMatchInfoContainer);
         }
+        
+        // Näytä tuomarin tiedot ja aiemmat pelit
+        if (typeof displayRefereeInfoAndPastGames === 'function' && refereeId && refereeName && currentGroupDataForInfo && currentGroupDataForInfo.matches) {
+            displayRefereeInfoAndPastGames(refereeId, refereeName, currentGroupDataForInfo.matches, currentMatchDetails.match_id, moreMatchInfoContainer);
+        }
+
 
         if (typeof displayTeamRecentAndUpcomingMatches === 'function') {
             displayTeamRecentAndUpcomingMatches(teamAId, teamAName, matchesTeamA, matchDate, currentMatchDetails.match_id, moreMatchInfoContainer);
