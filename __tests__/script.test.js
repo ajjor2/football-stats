@@ -165,6 +165,6 @@ describe('processPlayerMatchHistory', () => {
         expect(result.pastMatchesDetails[0].opponentName).toBe("Opponent A");
         expect(result.pastMatchesDetails[0].resultIndicator).toBe("win");
         expect(result.pastMatchesDetails[0].playerTeamScore).toBe("1");
-        expect(result.pastMatchesDetails[0].opponentTeamScore).toBe("7"); // Expect "7" now
+        expect(result.pastMatchesDetails[0].opponentScore).toBe("7"); // Changed from opponentTeamScore to opponentScore to match implementation
     });
 });
