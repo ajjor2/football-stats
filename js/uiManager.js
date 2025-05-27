@@ -28,7 +28,7 @@ function createPlayerStatCardElement(stats) {
         let showBreakdown = Object.keys(stats.goalsByTeamThisYear).length > 1;
         if (!showBreakdown && Object.keys(stats.goalsByTeamThisYear).length === 1) {
             const singleTeam = Object.keys(stats.goalsByTeamThisYear)[0];
-            if (singleTeam !== contextTeamName || !contextTeamName) {
+            if (singleTeam !== contextTeamName || !contextTeamName) { // if no context team, or single team is different
                  showBreakdown = true;
             }
         }
@@ -239,7 +239,7 @@ function displayMatchInfo(match, groupDataForMatchInfo, lineupGoalsA = 0, lineup
         refereeInfoHtml += `<p class="text-sm text-gray-600 text-center mt-3">Erotuomari: ${match.referee_1_name}</p>`;
     }
 
-    let refereePastGamesHtml = '';
+    let refereePastGamesForTeamsHtml = '';
     if (match.referee_1_id && groupDataForMatchInfo && groupDataForMatchInfo.matches) {
         const currentRefereeId = match.referee_1_id;
         const teamAId = match.team_A_id;
@@ -281,7 +281,7 @@ function displayMatchInfo(match, groupDataForMatchInfo, lineupGoalsA = 0, lineup
             }
             return '';
         };
-        refereePastGamesHtml += `<div class="grid grid-cols-1 md:grid-cols-2 gap-x-4 text-center">${getRefereeGamesList(teamAId, teamAName)}${getRefereeGamesList(teamBId, teamBName)}</div>`;
+        refereePastGamesForTeamsHtml = `<div class="grid grid-cols-1 md:grid-cols-2 gap-x-4 text-center">${getRefereeGamesList(teamAId, teamAName)}${getRefereeGamesList(teamBId, teamBName)}</div>`;
     }
 
     if (container) {
@@ -291,7 +291,7 @@ function displayMatchInfo(match, groupDataForMatchInfo, lineupGoalsA = 0, lineup
             ${goalComparisonHtml}
             ${headToHeadHtml}
             ${refereeInfoHtml}
-            ${refereePastGamesHtml}
+            ${refereePastGamesForTeamsHtml}
             <p class="text-sm text-gray-500 text-center mt-3">Päivämäärä: ${match.date || 'N/A'}</p>
             <p class="text-sm text-gray-500 text-center">Sarja: ${match.category_name || 'N/A'} (${match.competition_name || 'N/A'})</p>
         `;
@@ -599,22 +599,21 @@ function displayHeadToHeadMatchesCurrentYear(allMatchesForTeamA, teamAId, teamBI
         const involvesBothTeams = (match.team_A_id === teamAId && match.team_B_id === teamBId) ||
                                   (match.team_A_id === teamBId && match.team_B_id === teamAId);
         return isPlayed && isCurrentYear && isNotCurrentMatch && involvesBothTeams;
-    }).sort((a, b) => new Date(b.date + `T${b.time || '00:00:00'}Z`) - new Date(a.date + `T${a.time || '00:00:00'}Z`)); // Sort by date descending
+    }).sort((a, b) => new Date(b.date + `T${b.time || '00:00:00'}Z`) - new Date(a.date + `T${a.time || '00:00:00'}Z`));
 
     const h2hSectionId = `h2h-matches-info`;
     let h2hSectionContainer = parentContainer.querySelector(`#${h2hSectionId}`);
     if (!h2hSectionContainer) {
         h2hSectionContainer = document.createElement('div');
         h2hSectionContainer.id = h2hSectionId;
-        h2hSectionContainer.className = 'p-4 bg-blue-50 rounded-lg shadow mt-6'; // Added margin top for separation
-        // Insert H2H section before other team match sections
+        h2hSectionContainer.className = 'p-4 bg-blue-50 rounded-lg shadow mt-6';
         if (parentContainer.firstChild) {
             parentContainer.insertBefore(h2hSectionContainer, parentContainer.firstChild);
         } else {
             parentContainer.appendChild(h2hSectionContainer);
         }
     }
-    h2hSectionContainer.innerHTML = ''; // Clear previous content
+    h2hSectionContainer.innerHTML = '';
 
     const header = document.createElement('h4');
     header.className = 'text-xl font-semibold text-gray-800 mb-3 pb-2 border-b border-gray-300';
@@ -651,6 +650,89 @@ function displayHeadToHeadMatchesCurrentYear(allMatchesForTeamA, teamAId, teamBI
     }
 }
 
+/**
+ * Displays referee information and their past games.
+ * @param {string} refereeId - The ID of the referee.
+ * @param {string} refereeName - The name of the referee.
+ * @param {Array<Object>|null} allMatchesInContext - Array of all matches in the current context (e.g., from group data).
+ * @param {string} currentMatchId - The ID of the currently viewed match.
+ * @param {HTMLElement} parentContainer - The HTML element to append this section to.
+ */
+function displayRefereeInfoAndPastGames(refereeId, refereeName, allMatchesInContext, currentMatchId, parentContainer) {
+    if (!refereeId || !refereeName) {
+        return; // No referee info to display
+    }
+
+    const refereeSectionId = `referee-${refereeId}-info`;
+    let refereeSectionContainer = parentContainer.querySelector(`#${refereeSectionId}`);
+
+    if (!refereeSectionContainer) {
+        refereeSectionContainer = document.createElement('div');
+        refereeSectionContainer.id = refereeSectionId;
+        refereeSectionContainer.className = 'p-4 bg-yellow-50 rounded-lg shadow mt-6'; // Different background for referee section
+        // Add referee section after H2H and before individual team sections
+        const h2hSection = parentContainer.querySelector('#h2h-matches-info');
+        if (h2hSection && h2hSection.nextSibling) {
+            parentContainer.insertBefore(refereeSectionContainer, h2hSection.nextSibling);
+        } else if (h2hSection) {
+            parentContainer.appendChild(refereeSectionContainer); // If H2H is last
+        } else if (parentContainer.firstChild) {
+             parentContainer.insertBefore(refereeSectionContainer, parentContainer.firstChild); // If no H2H, add first
+        }
+         else {
+            parentContainer.appendChild(refereeSectionContainer); // If parent is empty
+        }
+    }
+    refereeSectionContainer.innerHTML = ''; // Clear previous content
+
+    const header = document.createElement('h4');
+    header.className = 'text-xl font-semibold text-gray-800 mb-3 pb-2 border-b border-gray-300';
+    header.textContent = `Erotuomari: ${refereeName}`;
+    refereeSectionContainer.appendChild(header);
+
+    if (!allMatchesInContext || allMatchesInContext.length === 0) {
+        const noDataP = document.createElement('p');
+        noDataP.className = 'text-gray-600 text-sm';
+        noDataP.textContent = 'Ei aiempia otteluita tälle tuomarille saatavilla tässä kontekstissa.';
+        refereeSectionContainer.appendChild(noDataP);
+        return;
+    }
+
+    const refereedGames = allMatchesInContext
+        .filter(match => match.referee_1_id === refereeId && match.status === 'Played' && match.match_id !== currentMatchId)
+        .sort((a, b) => new Date(b.date + `T${b.time || '00:00:00'}Z`) - new Date(a.date + `T${a.time || '00:00:00'}Z`))
+        .slice(0, 5); // Show last 5 games for the referee
+
+    if (refereedGames.length > 0) {
+        let listHtml = `<h5 class="text-md font-semibold text-gray-700 mt-3 mb-1">Viimeisimmät tuomitut ottelut (max 5):</h5>`;
+        listHtml += `<ul class="list-none pl-0 space-y-1 text-sm">`;
+        refereedGames.forEach(match => {
+            const homeTeam = match.team_A_name;
+            const awayTeam = match.team_B_name;
+            const homeScore = match.fs_A !== undefined ? match.fs_A : '-';
+            const awayScore = match.fs_B !== undefined ? match.fs_B : '-';
+            const competition = match.competition_name || '';
+            const category = match.category_name || '';
+            const group = match.group_name || '';
+            let competitionContext = competition;
+            if (category && category !== competition) competitionContext += ` (${category})`;
+            if (group) competitionContext += ` - ${group}`;
+
+            listHtml += `<li class="py-1 border-b border-gray-200 last:border-b-0">
+                            <span class="font-medium">${match.date}</span>: ${homeTeam} <span class="font-semibold">${homeScore} - ${awayScore}</span> ${awayTeam}
+                            ${competitionContext ? `<span class="text-xs text-gray-500 block">(${competitionContext})</span>` : ''}
+                         </li>`;
+        });
+        listHtml += `</ul>`;
+        refereeSectionContainer.innerHTML += listHtml;
+    } else {
+        const noDataP = document.createElement('p');
+        noDataP.className = 'text-gray-600 text-sm';
+        noDataP.textContent = 'Ei aiempia tuomittuja otteluita tälle tuomarille tässä sarjassa/lohkossa.';
+        refereeSectionContainer.appendChild(noDataP);
+    }
+}
+
 
 export {
     createPlayerStatCardElement,
@@ -660,5 +742,6 @@ export {
     displayPlayerStats,
     displayPlayersNotInLineup,
     displayTeamRecentAndUpcomingMatches,
-    displayHeadToHeadMatchesCurrentYear
+    displayHeadToHeadMatchesCurrentYear,
+    displayRefereeInfoAndPastGames // Uusi export
 };
