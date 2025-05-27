@@ -1,4 +1,5 @@
-const { processPlayerMatchHistory, config } = require('../script'); 
+import { processPlayerMatchHistory } from '../js/dataProcessor.js';
+import { config } from '../js/config.js';
 
 // Mock global browser-specific functions used in script.js
 global.fetch = jest.fn();
