@@ -179,7 +179,7 @@ function displayMatchInfo(match, groupDataForMatchInfo, lineupGoalsA = 0, lineup
 
         if (previousEncounters.length > 0) {
             headToHeadHtml = `<div class="mt-4 pt-3 border-t border-gray-200">
-                                <h4 class="text-sm font-semibold text-gray-700 mb-1 text-center">Viimeiset keskinäiset kohtaamiset:</h4>
+                                <h4 class="text-sm font-semibold text-gray-700 mb-1 text-center">Viimeiset keskinäiset kohtaamiset (samassa lohkossa):</h4>
                                 <ul class="head-to-head-list text-center">`;
             previousEncounters.forEach(enc => {
                 headToHeadHtml += `<li>${enc.date}: ${enc.team_A_name} ${enc.fs_A !== undefined ? enc.fs_A : '-'} - ${enc.fs_B !== undefined ? enc.fs_B : '-'} ${enc.team_B_name}</li>`;
@@ -225,7 +225,7 @@ function displayMatchInfo(match, groupDataForMatchInfo, lineupGoalsA = 0, lineup
                         else if (pastGame.winner_id === pastGame.team_A_id) resultIndicatorClass = 'loss';
                         else resultIndicatorClass = 'draw';
                     }
-                    if (!pastGame.winner_id || pastGame.winner_id === '-' || pastGame.winner_id === '0' || pastGame.winner_id === '') { // Added empty string check
+                    if (!pastGame.winner_id || pastGame.winner_id === '-' || pastGame.winner_id === '0' || pastGame.winner_id === '') {
                         resultIndicatorClass = 'draw';
                     }
                     listHtml += `<li class="referee-past-game-item"><span class="result-indicator ${resultIndicatorClass}"></span> ${pastGame.date}: vs ${opponentName} (${teamScore !== undefined ? teamScore : '-'}-${opponentScore !== undefined ? opponentScore : '-'})</li>`;
@@ -459,18 +459,16 @@ async function displayPlayersNotInLineup(teamDetails, matchLineupPlayerIds, team
  * @param {HTMLElement} parentContainer - The main container where team sections will be added.
  */
 function displayTeamRecentAndUpcomingMatches(teamId, teamName, allMatchesForTeam, currentMatchDateStr, currentMatchId, parentContainer) {
-    // Create a unique ID for this team's section to manage its content
     const teamSectionId = `team-${teamId}-matches-info`;
     let teamSectionContainer = parentContainer.querySelector(`#${teamSectionId}`);
 
-    // If the section doesn't exist, create it
     if (!teamSectionContainer) {
         teamSectionContainer = document.createElement('div');
         teamSectionContainer.id = teamSectionId;
-        teamSectionContainer.className = 'p-4 bg-white rounded-lg shadow mb-4'; // Added margin for spacing
+        teamSectionContainer.className = 'p-4 bg-white rounded-lg shadow mb-4';
         parentContainer.appendChild(teamSectionContainer);
     }
-    teamSectionContainer.innerHTML = ''; // Clear previous content for this specific team section before adding new
+    teamSectionContainer.innerHTML = '';
 
     const teamHeader = document.createElement('h4');
     teamHeader.className = 'text-xl font-semibold text-gray-800 mb-3 pb-2 border-b border-gray-300';
@@ -485,13 +483,13 @@ function displayTeamRecentAndUpcomingMatches(teamId, teamName, allMatchesForTeam
         return;
     }
 
-    const currentMatchDate = new Date(currentMatchDateStr + "T00:00:00Z"); // Use UTC to avoid timezone issues in date comparisons
+    const currentMatchDate = new Date(currentMatchDateStr + "T00:00:00Z");
 
     const playedMatches = allMatchesForTeam
         .filter(m => m.status === 'Played' && m.match_id !== currentMatchId && new Date(m.date + `T${m.time || '00:00:00'}Z`) < currentMatchDate)
         .sort((a, b) => new Date(b.date + `T${b.time || '00:00:00'}Z`) - new Date(a.date + `T${a.time || '00:00:00'}Z`))
         .slice(0, 3)
-        .reverse(); // Reverse to show oldest of the three first
+        .reverse();
 
     const upcomingMatches = allMatchesForTeam
         .filter(m => m.status === 'Fixture' && m.match_id !== currentMatchId && new Date(m.date + `T${m.time || '00:00:00'}Z`) >= currentMatchDate)
@@ -533,6 +531,81 @@ function displayTeamRecentAndUpcomingMatches(teamId, teamName, allMatchesForTeam
 }
 
 
+/**
+ * Displays head-to-head matches for the current year between the two main teams.
+ * @param {Array<Object>|null} allMatchesForTeamA - All matches for team A for the current year.
+ * @param {string} teamAId - ID of team A.
+ * @param {string} teamBId - ID of team B.
+ * @param {string} teamAName - Display name of team A.
+ * @param {string} teamBName - Display name of team B.
+ * @param {string} currentMatchId - The ID of the currently viewed match, to exclude it.
+ * @param {HTMLElement} parentContainer - The HTML element to append this section to.
+ */
+function displayHeadToHeadMatchesCurrentYear(allMatchesForTeamA, teamAId, teamBId, teamAName, teamBName, currentMatchId, parentContainer) {
+    if (!allMatchesForTeamA) {
+        return; // No data for team A, cannot determine H2H
+    }
+
+    const headToHeadMatches = allMatchesForTeamA.filter(match => {
+        const isPlayed = match.status === 'Played';
+        const isCurrentYear = match.date && match.date.startsWith(config.CURRENT_YEAR);
+        const isNotCurrentMatch = match.match_id !== currentMatchId;
+        const involvesBothTeams = (match.team_A_id === teamAId && match.team_B_id === teamBId) ||
+                                  (match.team_A_id === teamBId && match.team_B_id === teamAId);
+        return isPlayed && isCurrentYear && isNotCurrentMatch && involvesBothTeams;
+    }).sort((a, b) => new Date(b.date + `T${b.time || '00:00:00'}Z`) - new Date(a.date + `T${a.time || '00:00:00'}Z`)); // Sort by date descending
+
+    const h2hSectionId = `h2h-matches-info`;
+    let h2hSectionContainer = parentContainer.querySelector(`#${h2hSectionId}`);
+    if (!h2hSectionContainer) {
+        h2hSectionContainer = document.createElement('div');
+        h2hSectionContainer.id = h2hSectionId;
+        h2hSectionContainer.className = 'p-4 bg-blue-50 rounded-lg shadow mt-6'; // Added margin top for separation
+        // Insert H2H section before other team match sections
+        if (parentContainer.firstChild) {
+            parentContainer.insertBefore(h2hSectionContainer, parentContainer.firstChild);
+        } else {
+            parentContainer.appendChild(h2hSectionContainer);
+        }
+    }
+    h2hSectionContainer.innerHTML = ''; // Clear previous content
+
+    const header = document.createElement('h4');
+    header.className = 'text-xl font-semibold text-gray-800 mb-3 pb-2 border-b border-gray-300';
+    header.textContent = `Keskinäiset Ottelut (${config.CURRENT_YEAR}) - ${teamAName} vs ${teamBName}`;
+    h2hSectionContainer.appendChild(header);
+
+    if (headToHeadMatches.length > 0) {
+        let listHtml = `<ul class="list-none pl-0 space-y-1 text-sm">`;
+        headToHeadMatches.forEach(match => {
+            const homeTeam = match.team_A_name;
+            const awayTeam = match.team_B_name;
+            const homeScore = match.fs_A !== undefined ? match.fs_A : '-';
+            const awayScore = match.fs_B !== undefined ? match.fs_B : '-';
+            const competition = match.competition_name || '';
+            const category = match.category_name || '';
+            const group = match.group_name || '';
+            let competitionContext = competition;
+            if (category && category !== competition) competitionContext += ` (${category})`;
+            if (group) competitionContext += ` - ${group}`;
+
+
+            listHtml += `<li class="py-1 border-b border-gray-200 last:border-b-0">
+                            <span class="font-medium">${match.date}</span>: ${homeTeam} <span class="font-semibold">${homeScore} - ${awayScore}</span> ${awayTeam}
+                            ${competitionContext ? `<span class="text-xs text-gray-500 block">(${competitionContext})</span>` : ''}
+                         </li>`;
+        });
+        listHtml += `</ul>`;
+        h2hSectionContainer.innerHTML += listHtml;
+    } else {
+        const noDataP = document.createElement('p');
+        noDataP.className = 'text-gray-600 text-sm';
+        noDataP.textContent = `Ei keskinäisiä otteluita tällä kaudella joukkueiden ${teamAName} ja ${teamBName} välillä.`;
+        h2hSectionContainer.appendChild(noDataP);
+    }
+}
+
+
 export {
     createPlayerStatCardElement,
     displayMatchInfo,
@@ -540,5 +613,6 @@ export {
     processAndDisplayPlayerStats,
     displayPlayerStats,
     displayPlayersNotInLineup,
-    displayTeamRecentAndUpcomingMatches // New export
+    displayTeamRecentAndUpcomingMatches,
+    displayHeadToHeadMatchesCurrentYear // New export
 };
