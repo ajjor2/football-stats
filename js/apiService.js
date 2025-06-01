@@ -123,4 +123,52 @@ async function fetchTeamData(teamId) {
     }
 }
 
-export { fetchAPIData, fetchMatchDetails, fetchGroupDetails, fetchTeamData };
+/**
+ * Fetches past games for a team from the API.
+ * @param {string} teamId - The ID of the team.
+ * @param {number} count - The number of past games to fetch.
+ * @returns {Promise<Array|null>} A list of past games or null if an error occurs.
+ */
+async function fetchPastGames(teamId, count) {
+    try {
+        const data = await fetchAPIData('getGames', {
+            team_id: teamId,
+            status: 'played',
+            sort_order: 'desc',
+            limit: count
+        });
+        if (!data.games) {
+            throw new Error(`Past games data is invalid for team ID ${teamId}.`);
+        }
+        return data.games;
+    } catch (error) {
+        displayError(`Aiemmin pelattujen otteluiden haku joukkueelle ${teamId} epäonnistui: ${error.message}`);
+        return null;
+    }
+}
+
+/**
+ * Fetches upcoming games for a team from the API.
+ * @param {string} teamId - The ID of the team.
+ * @param {number} count - The number of upcoming games to fetch.
+ * @returns {Promise<Array|null>} A list of upcoming games or null if an error occurs.
+ */
+async function fetchUpcomingGames(teamId, count) {
+    try {
+        const data = await fetchAPIData('getGames', {
+            team_id: teamId,
+            status: 'fixture',
+            sort_order: 'asc',
+            limit: count
+        });
+        if (!data.games) {
+            throw new Error(`Upcoming games data is invalid for team ID ${teamId}.`);
+        }
+        return data.games;
+    } catch (error) {
+        displayError(`Tulevien otteluiden haku joukkueelle ${teamId} epäonnistui: ${error.message}`);
+        return null;
+    }
+}
+
+export { fetchAPIData, fetchMatchDetails, fetchGroupDetails, fetchTeamData, fetchPastGames, fetchUpcomingGames };

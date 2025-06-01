@@ -220,4 +220,148 @@ describe('Football Stats UI Tests', () => {
             throw e;
         }
     }, 20000); // Test-specific timeout
+
+
+    // New Test Suite for Team ID Functionality
+    describe('Team ID Functionality', () => {
+        const TEAM_ID_FOR_LISTS = 'testTeam123';
+        const TEAM_ID_FOR_CLICK = 'testTeam456';
+        const CLICKABLE_MATCH_ID = 'match789';
+
+        const mockPastGames = [
+            { match_id: 'past001', date: '2023-01-01', team_A_name: 'Past Team A', team_B_name: 'Past Team B', fs_A: '1', fs_B: '0', status: 'Played' },
+            { match_id: 'past002', date: '2023-01-08', team_A_name: 'Past Team C', team_B_name: 'Past Team D', fs_A: '2', fs_B: '2', status: 'Played' },
+        ];
+        const mockUpcomingGames = [
+            { match_id: 'future001', date: '2023-12-01', team_A_name: 'Future Team X', team_B_name: 'Future Team Y', status: 'Fixture' },
+        ];
+        const mockMatchDetailsForClick = {
+            match_id: CLICKABLE_MATCH_ID,
+            team_A_name: 'Clicked Team Alpha',
+            team_B_name: 'Clicked Team Beta',
+            fs_A: '3',
+            fs_B: '3',
+            date: "2023-05-05",
+            category_name: "Clicked Category",
+            competition_name: "Clicked Comp",
+            lineups: [], // Keep simple for this test
+        };
+
+        test('Display of Game Lists when teamid is in URL', async () => {
+            await page.goto(`${APP_URL}?teamid=${TEAM_ID_FOR_LISTS}`, { waitUntil: 'networkidle0' });
+
+            await page.evaluate((pastGames, upcomingGames, teamId) => {
+                window.originalFetchAPIData = window.fetchAPIData; // Store original if you want to restore
+                window.fetchAPIData = async (endpoint, params) => {
+                    console.log(`Mock API call (teamid test): ${endpoint} with params`, params);
+                    if (endpoint === 'getGames') {
+                        if (params.team_id === teamId && params.status === 'played') {
+                            return { call: { status: "ok" }, games: pastGames };
+                        }
+                        if (params.team_id === teamId && params.status === 'fixture') {
+                            return { call: { status: "ok" }, games: upcomingGames };
+                        }
+                    }
+                    return { call: { status: "ok" }, games: [] }; // Default empty for other calls
+                };
+            }, mockPastGames, mockUpcomingGames, TEAM_ID_FOR_LISTS);
+
+            // It might take a moment for script.js to process and render the lists
+            await page.waitForSelector('#pastGamesContainer li', { timeout: 5000 });
+            await page.waitForSelector('#upcomingGamesContainer li', { timeout: 5000 });
+
+            const pastGamesTitle = await page.$eval('#pastGamesContainer h3', el => el.textContent);
+            expect(pastGamesTitle).toBe('Past Games');
+
+            const pastGameTexts = await page.$$eval('#pastGamesContainer li a', anchors => anchors.map(a => a.textContent));
+            expect(pastGameTexts.length).toBe(mockPastGames.length);
+            expect(pastGameTexts[0]).toContain(`${mockPastGames[0].date}: ${mockPastGames[0].team_A_name} vs ${mockPastGames[0].team_B_name} - ${mockPastGames[0].fs_A}-${mockPastGames[0].fs_B}`);
+
+            const upcomingGamesTitle = await page.$eval('#upcomingGamesContainer h3', el => el.textContent);
+            expect(upcomingGamesTitle).toBe('Upcoming Games');
+
+            const upcomingGameTexts = await page.$$eval('#upcomingGamesContainer li a', anchors => anchors.map(a => a.textContent));
+            expect(upcomingGameTexts.length).toBe(mockUpcomingGames.length);
+            expect(upcomingGameTexts[0]).toContain(`${mockUpcomingGames[0].date}: ${mockUpcomingGames[0].team_A_name} vs ${mockUpcomingGames[0].team_B_name}`);
+
+            // Check that main match input is hidden
+            const matchInputContainer = await page.$('#matchInputContainer'); // Assuming this ID was added in script.js logic
+            if (matchInputContainer) { // Only check if the element is expected to exist
+                 const isMatchInputHidden = await page.evaluate(el => el.style.display === 'none', matchInputContainer);
+                 expect(isMatchInputHidden).toBe(true);
+            }
+
+        }, 20000); // Test-specific timeout
+
+        test('Clicking a game link loads match data', async () => {
+            await page.goto(`${APP_URL}?teamid=${TEAM_ID_FOR_CLICK}`, { waitUntil: 'networkidle0' });
+
+            const gameForClickSetup = [
+                { match_id: CLICKABLE_MATCH_ID, date: '2023-03-03', team_A_name: 'Initial Team A', team_B_name: 'Initial Team B', status: 'Played', fs_A: '1', fs_B: '1' }
+            ];
+
+            await page.evaluate((gameSetup, clickedMatchDetails, targetMatchId) => {
+                window.fetchAPIData = async (endpoint, params) => {
+                    console.log(`Mock API call (click test): ${endpoint} with params`, params);
+                    if (endpoint === 'getGames' && params.team_id === TEAM_ID_FOR_CLICK) { // Use the outer scope TEAM_ID_FOR_CLICK
+                        return { call: { status: "ok" }, games: gameSetup };
+                    }
+                    if (endpoint === 'getMatch' && params.match_id === targetMatchId) {
+                        return { call: { status: "ok" }, match: clickedMatchDetails };
+                    }
+                    // Mock other calls made by loadMatchData if necessary
+                    if (endpoint === 'getGroup') return { call: { status: "ok" }, group: { teams: []} };
+                    if (endpoint === 'getTeam') return { call: { status: "ok" }, team: { players: []} };
+
+                    return { call: { status: "ok" }, games: [], match: {}, group: {}, team: {} }; // Default
+                };
+            }, gameForClickSetup, mockMatchDetailsForClick, CLICKABLE_MATCH_ID);
+
+            // Wait for the link to appear and click it
+            const linkSelector = `#pastGamesContainer li a[onclick*="loadMatchDataWithId('${CLICKABLE_MATCH_ID}')"], #upcomingGamesContainer li a[onclick*="loadMatchDataWithId('${CLICKABLE_MATCH_ID}')"]`;
+            // A more robust way if onclick is not directly inspectable or complex:
+            // Find the link by its text content or a data attribute if you add one.
+            // For now, we assume the list is simple and the first link (if only one mock game) or find by match_id in text.
+
+            // Wait for the specific link. This assumes the link text contains the match_id or identifiable parts.
+            // This is a bit brittle. A data-match-id attribute on the link would be better.
+            // For this example, let's assume it's the first link in pastGamesContainer.
+            await page.waitForSelector('#pastGamesContainer li a', { timeout: 5000 });
+            const gameLink = await page.$('#pastGamesContainer li a'); // Assuming it's the first one
+
+            if (!gameLink) throw new Error(`Link for match ${CLICKABLE_MATCH_ID} not found.`);
+
+            await gameLink.click();
+
+            // Assertions
+            // 1. matchIdInput value updated
+            await page.waitForFunction(
+                (expectedId) => document.getElementById('matchIdInput').value === expectedId,
+                { timeout: 5000 },
+                CLICKABLE_MATCH_ID
+            );
+            const matchIdInputValue = await page.$eval('#matchIdInput', el => el.value);
+            expect(matchIdInputValue).toBe(CLICKABLE_MATCH_ID);
+
+            // 2. Match info is displayed for the clicked match
+            await page.waitForFunction(
+                (expectedName) => document.querySelector('#matchInfo h2').textContent.includes(expectedName),
+                { timeout: 10000 }, // Increased timeout as data processing might take time
+                mockMatchDetailsForClick.team_A_name
+            );
+            const matchInfoText = await page.$eval('#matchInfo', el => el.textContent);
+            expect(matchInfoText).toContain(`${mockMatchDetailsForClick.team_A_name} vs ${mockMatchDetailsForClick.team_B_name}`);
+            expect(matchInfoText).toContain(`Tulos: ${mockMatchDetailsForClick.fs_A} - ${mockMatchDetailsForClick.fs_B}`);
+
+            // Check that match input container is now visible (if it was hidden by teamid view)
+            // This depends on whether loadMatchData explicitly shows it.
+            // Assuming the matchInputContainer (with id 'matchInputContainer') should be visible again.
+            const matchInputContainer = await page.$('#matchInputContainer');
+            if (matchInputContainer) {
+                const isMatchInputVisible = await page.evaluate(el => el.style.display !== 'none', matchInputContainer);
+                expect(isMatchInputVisible).toBe(true); // Or check for 'block' or empty string if that's how it's shown
+            }
+
+        }, 25000); // Test-specific timeout
+    });
 });

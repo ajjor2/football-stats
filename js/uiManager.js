@@ -467,5 +467,63 @@ export {
     displayGroupInfoAndStandings, 
     processAndDisplayPlayerStats, 
     displayPlayerStats, 
-    displayPlayersNotInLineup 
+    displayPlayersNotInLineup,
+    displayGamesList
 };
+
+/**
+ * Displays a list of games (past or upcoming) in a specified container.
+ * @param {Array<Object>} games - An array of game objects.
+ * @param {string} containerId - The ID of the HTML element to display the list in.
+ * @param {string} title - The title for the list (e.g., "Past Games").
+ */
+function displayGamesList(games, containerId, title) {
+    const container = document.getElementById(containerId);
+
+    if (!container) {
+        console.error(`Container with ID "${containerId}" not found.`);
+        return;
+    }
+
+    // Clear existing content
+    container.innerHTML = '';
+
+    const titleElement = document.createElement('h3');
+    titleElement.textContent = title;
+    container.appendChild(titleElement);
+
+    if (!games || games.length === 0) {
+        const noGamesMessage = document.createElement('p');
+        noGamesMessage.textContent = "No games found.";
+        container.appendChild(noGamesMessage);
+        return;
+    }
+
+    const ul = document.createElement('ul');
+    games.forEach(game => {
+        const li = document.createElement('li');
+        const a = document.createElement('a');
+        a.href = '#'; // Or javascript:void(0)
+        // Example: "2023-10-26: Team A vs Team B - 1-0"
+        // Make sure fs_A and fs_B are defined, otherwise show '-'
+        const scoreA = game.fs_A !== undefined ? game.fs_A : '-';
+        const scoreB = game.fs_B !== undefined ? game.fs_B : '-';
+        let gameText = `${game.date}: ${game.team_A_name} vs ${game.team_B_name}`;
+        if (game.status === 'Played' || game.status === 'played') { // Check for played status to show score
+            gameText += ` - ${scoreA}-${scoreB}`;
+        }
+
+        a.textContent = gameText;
+        a.addEventListener('click', (event) => {
+            event.preventDefault(); // Prevent default anchor behavior
+            if (typeof loadMatchDataWithId === 'function') {
+                loadMatchDataWithId(game.match_id);
+            } else {
+                console.warn('loadMatchDataWithId function is not defined globally.');
+            }
+        });
+        li.appendChild(a);
+        ul.appendChild(li);
+    });
+    container.appendChild(ul);
+}
