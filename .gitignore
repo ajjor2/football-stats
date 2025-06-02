@@ -1,7 +1,0 @@
-node_modules/
-# package-lock.json - Uncommenting to allow CI/CD deployment
-npm-debug.log
-*.log
-.DS_Store
-.env
-coverage/
