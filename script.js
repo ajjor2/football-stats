@@ -152,6 +152,7 @@ async function loadMoreTeamInfo() {
         const teamAName = currentMatchDetails.team_A_name || `Joukkue ${teamAId}`;
         const teamBName = currentMatchDetails.team_B_name || `Joukkue ${teamBId}`;
         const matchDate = currentMatchDetails.date;
+        const currentMatchDateObj = new Date(matchDate + "T00:00:00Z"); // Standardize to midnight UTC
         const currentYear = config.CURRENT_YEAR;
         const startDate = `${currentYear}-01-01`;
         const refereeId = currentMatchDetails.referee_1_id;
