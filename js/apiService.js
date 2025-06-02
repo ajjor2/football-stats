@@ -18,7 +18,7 @@ async function fetchAPIData(endpoint, params = {}) {
     if (!isTestEnvironment) {
         if (globalRateLimiter && !globalRateLimiter()) {
             const errorMessage = `Yleinen käyttöraja ylitetty. Yritä hetken kuluttua uudelleen.`;
-            // displayError(errorMessage); // displayError is available from utils.js
+            displayError(errorMessage); // displayError is available from utils.js
             throw new Error(errorMessage);
         }
 
