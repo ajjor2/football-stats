@@ -1,4 +1,4 @@
-// Data processing functions, formerly in script.js
+// js/dataProcessor.js
 
 import { config } from './config.js';
 import { fetchAPIData } from './apiService.js';
@@ -9,9 +9,10 @@ import { fetchAPIData } from './apiService.js';
  * @param {string} currentSeasonId - Identifier for the current season (usually config.CURRENT_YEAR).
  * @param {string} previousSeasonId - Identifier for the previous season (usually config.PREVIOUS_YEAR).
  * @param {string|null} teamNameForContext - Name of the team for context-specific stats.
+ * @param {Object} [teamIdToPrimaryCategoryNameMap={}] - A map from team_id to its primary category name for the current season.
  * @returns {Object} Contains stats like gamesPlayedThisYear, goalsThisYear, etc.
  */
-function processPlayerMatchHistory(matches, currentSeasonId, previousSeasonId, teamNameForContext) {
+function processPlayerMatchHistory(matches, currentSeasonId, previousSeasonId, teamNameForContext, teamIdToPrimaryCategoryNameMap = {}) {
     const stats = {
         gamesPlayedThisYear: 0, goalsThisYear: 0, warningsThisYear: 0, suspensionsThisYear: 0,
         goalsByTeamThisYear: {}, gamesByTeamThisYear: {},
@@ -28,12 +29,24 @@ function processPlayerMatchHistory(matches, currentSeasonId, previousSeasonId, t
         if (isCurrentSeason) {
             stats.gamesPlayedThisYear++;
             const teamNameForGame = pastMatch.team_name || 'Tuntematon joukkue';
-            stats.gamesByTeamThisYear[teamNameForGame] = (stats.gamesByTeamThisYear[teamNameForGame] || 0) + 1;
+            
+            let leagueName;
+            // Käytä ensisijaisesti player.teams -> primary_category.category_name kartasta
+            if (pastMatch.team_id && teamIdToPrimaryCategoryNameMap[pastMatch.team_id]) {
+                leagueName = teamIdToPrimaryCategoryNameMap[pastMatch.team_id];
+            } else {
+                // Fallback: käytä ottelun omaa competition_name tai category_name
+                leagueName = pastMatch.competition_name || pastMatch.category_name || 'Sarja tuntematon';
+            }
+            
+            const displayKey = `${teamNameForGame} (${leagueName})`;
+
+            stats.gamesByTeamThisYear[displayKey] = (stats.gamesByTeamThisYear[displayKey] || 0) + 1;
 
             const playerGoals = parseInt(pastMatch.player_goals) || 0;
             stats.goalsThisYear += playerGoals;
             if (playerGoals > 0) {
-                stats.goalsByTeamThisYear[teamNameForGame] = (stats.goalsByTeamThisYear[teamNameForGame] || 0) + playerGoals;
+                stats.goalsByTeamThisYear[displayKey] = (stats.goalsByTeamThisYear[displayKey] || 0) + playerGoals;
                 if (teamNameForGame && teamNameForContext && teamNameForGame === teamNameForContext) {
                     stats.goalsForThisSpecificTeamInSeason += playerGoals;
                 }
@@ -107,15 +120,12 @@ async function fetchAndProcessPlayerData(playerId, teamIdInMatch, fullMatchData,
     };
 
     if (!playerId || playerId.toString().startsWith("oma_maali")) {
-        // console.warn is a global function
         console.warn(`Player ID puuttuu tai on "oma maali" (${playerId}), ohitetaan pelaaja.`);
         return null; 
     }
     try {
-        // fetchAPIData is imported from apiService.js
         const playerData = await fetchAPIData('getPlayer', { player_id: playerId.toString() });
         if (!playerData.player) {
-            // console.error is a global function
             console.error(`Pelaajaa ${playerId} ei löytynyt tai data on virheellistä (API response).`);
             return {...defaultPlayerInfo, teamsThisYear: `Ei löytynyt (API)`};
         }
@@ -128,21 +138,41 @@ async function fetchAndProcessPlayerData(playerId, teamIdInMatch, fullMatchData,
                                     : (teamIdInMatch === fullMatchData.team_B_id ? fullMatchData.team_B_name : 
                                        (playerLineupInfoFromMatch && playerLineupInfoFromMatch.team_name_from_getTeam ? playerLineupInfoFromMatch.team_name_from_getTeam : null));
 
-        // processPlayerMatchHistory is defined in this file. config is imported.
-        const seasonStats = processPlayerMatchHistory(playerDataFromAPI.matches, config.CURRENT_YEAR, config.PREVIOUS_YEAR, teamNameForThisContext);
+        // UUSI: Luo teamId -> primary_category.category_name mappaus
+        const teamIdToPrimaryCategoryNameMap = {};
+        if (playerDataFromAPI.teams && Array.isArray(playerDataFromAPI.teams)) {
+            playerDataFromAPI.teams.forEach(teamEntry => {
+                const isCurrentYearTeam = teamEntry.primary_category &&
+                    ((teamEntry.primary_category.competition_id && teamEntry.primary_category.competition_id.toLowerCase().includes(config.CURRENT_YEAR.substring(2))) ||
+                     (teamEntry.primary_category.competition_name && teamEntry.primary_category.competition_name.includes(config.CURRENT_YEAR)));
         
-        let teamsThisYear = [];
+                if (isCurrentYearTeam && teamEntry.team_id && teamEntry.primary_category.category_name) {
+                    teamIdToPrimaryCategoryNameMap[teamEntry.team_id] = teamEntry.primary_category.category_name;
+                }
+            });
+        }
+        
+        // Välitä uusi kartta processPlayerMatchHistory-funktiolle
+        const seasonStats = processPlayerMatchHistory(
+            playerDataFromAPI.matches, 
+            config.CURRENT_YEAR, 
+            config.PREVIOUS_YEAR, 
+            teamNameForThisContext,
+            teamIdToPrimaryCategoryNameMap // Uusi parametri
+        );
+        
+        let teamsThisYear = []; // Tämä logiikka pysyy samana "Joukkueet (2025)"-osiolle
         if (playerDataFromAPI.teams && Array.isArray(playerDataFromAPI.teams)) {
              playerDataFromAPI.teams.forEach(teamEntry => {
                 if (teamEntry.primary_category && 
                     ( (teamEntry.primary_category.competition_id && teamEntry.primary_category.competition_id.toLowerCase().includes(config.CURRENT_YEAR.substring(2))) || 
                       (teamEntry.primary_category.competition_name && teamEntry.primary_category.competition_name.includes(config.CURRENT_YEAR)) )) {
+                    // Käytetään category_name tähän listaukseen, kuten aiemmin
                     teamsThisYear.push(`${teamEntry.team_name} (${teamEntry.primary_category.category_name || 'Sarja tuntematon'})`);
                 }
              });
         }
          if (teamsThisYear.length === 0 && playerDataFromAPI.club_name) {
-            // config is imported
             teamsThisYear.push(`${playerDataFromAPI.club_name} (Joukkueen tarkka sarja ${config.CURRENT_YEAR} ei tiedossa)`);
         }
         if (teamsThisYear.length === 0) {
@@ -152,7 +182,7 @@ async function fetchAndProcessPlayerData(playerId, teamIdInMatch, fullMatchData,
         return { 
             ...defaultPlayerInfo,
             name: playerName, shirtNumber: shirtNumber, birthYear: playerDataFromAPI.birthyear || 'N/A',
-            ...seasonStats,
+            ...seasonStats, // Sisältää nyt päivitetyn goalsByTeamThisYear ja gamesByTeamThisYear
             teamsThisYear: teamsThisYear.join('<br>'),
             position_fi: playerDataFromAPI.position_fi, nationality: playerDataFromAPI.nationality,
             img_url: playerDataFromAPI.img_url, height: playerDataFromAPI.height, weight: playerDataFromAPI.weight,
@@ -167,7 +197,6 @@ async function fetchAndProcessPlayerData(playerId, teamIdInMatch, fullMatchData,
             exception_representation: playerDataFromAPI.exception_representation,
         };
     } catch (error) { 
-        // console.error is a global function
         console.error(`Virhe pelaajan ${playerId} tietojen käsittelyssä (${error.message}):`, error);
          return {...defaultPlayerInfo, teamsThisYear: `Virhe haussa pelaajalle ${playerId}`};
     }
