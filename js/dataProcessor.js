@@ -15,7 +15,8 @@ import { fetchAPIData } from './apiService.js';
 function processPlayerMatchHistory(matches, currentSeasonId, previousSeasonId, teamNameForContext, teamIdToPrimaryCategoryNameMap = {}) {
     const stats = {
         gamesPlayedThisYear: 0, goalsThisYear: 0, warningsThisYear: 0, suspensionsThisYear: 0,
-        goalsByTeamThisYear: {}, gamesByTeamThisYear: {},
+        goalsByTeamThisYear: {}, // Muuttuu objektiksi: { [displayKey]: { count: X, lastPlayedDate: "YYYY-MM-DD" } }
+        gamesByTeamThisYear: {}, // Muuttuu objektiksi: { [displayKey]: { count: X, lastPlayedDate: "YYYY-MM-DD" } }
         goalsForThisSpecificTeamInSeason: 0, pastMatchesDetails: [],
         gamesPlayedLastSeason: 0, goalsScoredLastSeason: 0
     };
@@ -31,22 +32,35 @@ function processPlayerMatchHistory(matches, currentSeasonId, previousSeasonId, t
             const teamNameForGame = pastMatch.team_name || 'Tuntematon joukkue';
             
             let leagueName;
-            // Käytä ensisijaisesti player.teams -> primary_category.category_name kartasta
             if (pastMatch.team_id && teamIdToPrimaryCategoryNameMap[pastMatch.team_id]) {
                 leagueName = teamIdToPrimaryCategoryNameMap[pastMatch.team_id];
             } else {
-                // Fallback: käytä ottelun omaa competition_name tai category_name
                 leagueName = pastMatch.competition_name || pastMatch.category_name || 'Sarja tuntematon';
             }
             
             const displayKey = `${teamNameForGame} (${leagueName})`;
 
-            stats.gamesByTeamThisYear[displayKey] = (stats.gamesByTeamThisYear[displayKey] || 0) + 1;
+            // Käsittele gamesByTeamThisYear
+            if (!stats.gamesByTeamThisYear[displayKey]) {
+                stats.gamesByTeamThisYear[displayKey] = { count: 0, lastPlayedDate: "0000-00-00" };
+            }
+            stats.gamesByTeamThisYear[displayKey].count++;
+            if (pastMatch.date > stats.gamesByTeamThisYear[displayKey].lastPlayedDate) {
+                stats.gamesByTeamThisYear[displayKey].lastPlayedDate = pastMatch.date;
+            }
 
             const playerGoals = parseInt(pastMatch.player_goals) || 0;
             stats.goalsThisYear += playerGoals;
             if (playerGoals > 0) {
-                stats.goalsByTeamThisYear[displayKey] = (stats.goalsByTeamThisYear[displayKey] || 0) + playerGoals;
+                // Käsittele goalsByTeamThisYear
+                if (!stats.goalsByTeamThisYear[displayKey]) {
+                    stats.goalsByTeamThisYear[displayKey] = { count: 0, lastPlayedDate: "0000-00-00" };
+                }
+                stats.goalsByTeamThisYear[displayKey].count += playerGoals;
+                if (pastMatch.date > stats.goalsByTeamThisYear[displayKey].lastPlayedDate) {
+                    stats.goalsByTeamThisYear[displayKey].lastPlayedDate = pastMatch.date;
+                }
+
                 if (teamNameForGame && teamNameForContext && teamNameForGame === teamNameForContext) {
                     stats.goalsForThisSpecificTeamInSeason += playerGoals;
                 }
@@ -138,7 +152,6 @@ async function fetchAndProcessPlayerData(playerId, teamIdInMatch, fullMatchData,
                                     : (teamIdInMatch === fullMatchData.team_B_id ? fullMatchData.team_B_name : 
                                        (playerLineupInfoFromMatch && playerLineupInfoFromMatch.team_name_from_getTeam ? playerLineupInfoFromMatch.team_name_from_getTeam : null));
 
-        // UUSI: Luo teamId -> primary_category.category_name mappaus
         const teamIdToPrimaryCategoryNameMap = {};
         if (playerDataFromAPI.teams && Array.isArray(playerDataFromAPI.teams)) {
             playerDataFromAPI.teams.forEach(teamEntry => {
@@ -152,22 +165,20 @@ async function fetchAndProcessPlayerData(playerId, teamIdInMatch, fullMatchData,
             });
         }
         
-        // Välitä uusi kartta processPlayerMatchHistory-funktiolle
         const seasonStats = processPlayerMatchHistory(
             playerDataFromAPI.matches, 
             config.CURRENT_YEAR, 
             config.PREVIOUS_YEAR, 
             teamNameForThisContext,
-            teamIdToPrimaryCategoryNameMap // Uusi parametri
+            teamIdToPrimaryCategoryNameMap
         );
         
-        let teamsThisYear = []; // Tämä logiikka pysyy samana "Joukkueet (2025)"-osiolle
+        let teamsThisYear = [];
         if (playerDataFromAPI.teams && Array.isArray(playerDataFromAPI.teams)) {
              playerDataFromAPI.teams.forEach(teamEntry => {
                 if (teamEntry.primary_category && 
                     ( (teamEntry.primary_category.competition_id && teamEntry.primary_category.competition_id.toLowerCase().includes(config.CURRENT_YEAR.substring(2))) || 
                       (teamEntry.primary_category.competition_name && teamEntry.primary_category.competition_name.includes(config.CURRENT_YEAR)) )) {
-                    // Käytetään category_name tähän listaukseen, kuten aiemmin
                     teamsThisYear.push(`${teamEntry.team_name} (${teamEntry.primary_category.category_name || 'Sarja tuntematon'})`);
                 }
              });
@@ -182,7 +193,7 @@ async function fetchAndProcessPlayerData(playerId, teamIdInMatch, fullMatchData,
         return { 
             ...defaultPlayerInfo,
             name: playerName, shirtNumber: shirtNumber, birthYear: playerDataFromAPI.birthyear || 'N/A',
-            ...seasonStats, // Sisältää nyt päivitetyn goalsByTeamThisYear ja gamesByTeamThisYear
+            ...seasonStats,
             teamsThisYear: teamsThisYear.join('<br>'),
             position_fi: playerDataFromAPI.position_fi, nationality: playerDataFromAPI.nationality,
             img_url: playerDataFromAPI.img_url, height: playerDataFromAPI.height, weight: playerDataFromAPI.weight,
