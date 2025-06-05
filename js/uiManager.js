@@ -7,15 +7,13 @@ import { fetchAndProcessPlayerData } from './dataProcessor.js';
 function createPlayerStatCardElement(stats) {
     const card = document.createElement('div');
     card.className = 'stat-card bg-white border border-gray-200 p-5 rounded-lg shadow-lg hover:shadow-xl';
-
+    // ... (sisältö ennallaan) ...
     const playerImageHtml = (stats.img_url && stats.img_url !== config.NO_PLAYER_IMAGE_URL)
         ? `<img src="${stats.img_url}" alt="Pelaajan kuva" class="player-image" onerror="this.style.display='none';">`
         : '';
-
     const crestUrl = (stats.clubCrest && stats.clubCrest !== config.DEFAULT_CREST_URL)
         ? stats.clubCrest
         : config.PLACEHOLDER_CREST_URL;
-
     let goalsDisplayContent;
     const goalsBreakdownKeys = stats.goalsByTeamThisYear ? Object.keys(stats.goalsByTeamThisYear) : [];
     if (stats.goalsThisYear > 0 && goalsBreakdownKeys.length > 0) {
@@ -28,7 +26,6 @@ function createPlayerStatCardElement(stats) {
     } else {
         goalsDisplayContent = stats.goalsThisYear.toString();
     }
-
     let gamesPlayedDisplayContent;
     const gamesBreakdownKeys = stats.gamesByTeamThisYear ? Object.keys(stats.gamesByTeamThisYear) : [];
     if (stats.gamesPlayedThisYear > 0 && gamesBreakdownKeys.length > 0) {
@@ -41,7 +38,6 @@ function createPlayerStatCardElement(stats) {
     } else {
         gamesPlayedDisplayContent = stats.gamesPlayedThisYear.toString();
     }
-
     let additionalInfoHtmlSegments = [];
     const fieldsToShow = [
         { key: 'position_fi', label: 'Pelipaikka' }, { key: 'height', label: 'Pituus', suffix: ' cm' },
@@ -54,7 +50,6 @@ function createPlayerStatCardElement(stats) {
     if (stats.isCaptainInMatch) {
         fieldsToShow.splice(4, 0, { key: 'isCaptainInMatch', label: 'Kapteeni tässä ottelussa', displayValue: 'Kyllä' });
     }
-
     fieldsToShow.forEach(field => {
         let value = stats[field.key];
         let displayValue = value;
@@ -68,15 +63,12 @@ function createPlayerStatCardElement(stats) {
         additionalInfoHtmlSegments.push(createStatItemHtml(field.label, displayValue));
     });
     const additionalInfoHtml = additionalInfoHtmlSegments.filter(s => s).join('');
-
     const suspensionsHtml = (stats.suspensionsThisYear > 0)
         ? createStatItemHtml(`Ulosajot (${config.CURRENT_YEAR})`, stats.suspensionsThisYear, "bg-gray-50 p-3 rounded-md sm:col-span-2") : '';
-
     const previousSeasonStatsHtml = (stats.gamesPlayedLastSeason > 0 || stats.goalsScoredLastSeason > 0)
         ? `${createStatItemHtml(`Ottelut (${config.PREVIOUS_YEAR})`, stats.gamesPlayedLastSeason)}
            ${createStatItemHtml(`Maalit (${config.PREVIOUS_YEAR})`, stats.goalsScoredLastSeason)}`
         : '';
-
     let pastMatchesDisplayHtml = '';
     if (stats.pastMatchesDetails && stats.pastMatchesDetails.length > 0) {
         const matchesHtml = stats.pastMatchesDetails.slice(0, 10).map(match => {
@@ -94,12 +86,10 @@ function createPlayerStatCardElement(stats) {
                                 <h4 class="text-md font-semibold text-gray-700 mb-2">Pelatut ottelut tälle joukkueelle (${config.CURRENT_YEAR}):</h4>
                                 <ul class="list-none pl-0 space-y-1">${matchesHtml}</ul></div>`;
     }
-
     let otherTeamsGamesHtml = '';
     if (stats.otherTeamsDetailedMatches && Object.keys(stats.otherTeamsDetailedMatches).length > 0) {
         let allOtherMatchesHtmlList = '';
         const sortedOtherTeamKeys = Object.keys(stats.otherTeamsDetailedMatches).sort((a, b) => a.localeCompare(b));
-
         for (const teamDisplayKey of sortedOtherTeamKeys) {
             const teamMatches = stats.otherTeamsDetailedMatches[teamDisplayKey];
             if (teamMatches.length > 0) {
@@ -119,7 +109,6 @@ function createPlayerStatCardElement(stats) {
                 allOtherMatchesHtmlList += '</ul>';
             }
         }
-
         if (allOtherMatchesHtmlList) {
             otherTeamsGamesHtml = `
                 <div class="mt-4 pt-4 border-t border-gray-200 col-span-1 sm:col-span-2">
@@ -128,7 +117,6 @@ function createPlayerStatCardElement(stats) {
                 </div>`;
         }
     }
-
     card.innerHTML = `
         <div class="flex items-center mb-4">
             <img src="${crestUrl}" alt="Seuran logo" class="w-10 h-10 mr-3 rounded-full object-contain" onerror="this.src='${config.PLACEHOLDER_CREST_URL}'; this.onerror=null;">
@@ -154,19 +142,17 @@ function createPlayerStatCardElement(stats) {
 }
 
 function displayMatchInfo(match, groupDataForMatchInfo, lineupGoalsA = 0, lineupGoalsB = 0, container) {
+    // ... (sisältö ennallaan) ...
     const teamAName = match.team_A_name || 'Kotijoukkue';
     const teamBName = match.team_B_name || 'Vierasjoukkue';
     const scoreA = match.fs_A !== undefined ? match.fs_A : '-';
     const scoreB = match.fs_B !== undefined ? match.fs_B : '-';
-
     let teamAStatsInGroup = null;
     let teamBStatsInGroup = null;
-
     if (groupDataForMatchInfo && groupDataForMatchInfo.teams) {
         teamAStatsInGroup = groupDataForMatchInfo.teams.find(t => t.team_id === match.team_A_id);
         teamBStatsInGroup = groupDataForMatchInfo.teams.find(t => t.team_id === match.team_B_id);
     }
-
     let goalComparisonHtml = '';
     if (teamAStatsInGroup || teamBStatsInGroup || lineupGoalsA > 0 || lineupGoalsB > 0 || (match.lineups && match.lineups.length > 0)) {
         goalComparisonHtml = `
@@ -186,20 +172,17 @@ function displayMatchInfo(match, groupDataForMatchInfo, lineupGoalsA = 0, lineup
             </div>
         </div>`;
     }
-
     let headToHeadHtml = '';
     if (groupDataForMatchInfo && groupDataForMatchInfo.matches) {
         const teamAId = match.team_A_id;
         const teamBId = match.team_B_id;
         const currentMatchId = match.match_id;
-
         const previousEncounters = groupDataForMatchInfo.matches.filter(m =>
             m.match_id !== currentMatchId &&
             ((m.team_A_id === teamAId && m.team_B_id === teamBId) || (m.team_A_id === teamBId && m.team_B_id === teamAId)) &&
             m.status === "Played"
         ).sort((a, b) => new Date(`${b.date}T${b.time || '00:00:00'}`) - new Date(`${a.date}T${a.time || '00:00:00'}`))
          .slice(0, 3);
-
         if (previousEncounters.length > 0) {
             headToHeadHtml = `<div class="mt-4 pt-3 border-t border-gray-200">
                                 <h4 class="text-sm font-semibold text-gray-700 mb-1 text-center">Viimeiset keskinäiset kohtaamiset:</h4>
@@ -210,18 +193,15 @@ function displayMatchInfo(match, groupDataForMatchInfo, lineupGoalsA = 0, lineup
             headToHeadHtml += `</ul></div>`;
         }
     }
-
     let refereeInfoHtml = '';
     if (match.referee_1_name) {
         refereeInfoHtml += `<p class="text-sm text-gray-600 text-center mt-3">Erotuomari: ${match.referee_1_name}</p>`;
     }
-
     let refereePastGamesHtml = '';
     if (match.referee_1_id && groupDataForMatchInfo && groupDataForMatchInfo.matches) {
         const currentRefereeId = match.referee_1_id;
         const teamAId = match.team_A_id;
         const teamBId = match.team_B_id;
-
         const getRefereeGamesList = (targetTeamId, targetTeamName) => {
             const games = groupDataForMatchInfo.matches
                 .filter(m =>
@@ -232,7 +212,6 @@ function displayMatchInfo(match, groupDataForMatchInfo, lineupGoalsA = 0, lineup
                 )
                 .sort((a, b) => new Date(`${b.date}T${b.time || '00:00:00'}`) - new Date(`${a.date}T${a.time || '00:00:00'}`))
                 .slice(0, 3);
-
             if (games.length > 0) {
                 let listHtml = `<div class="mt-2"><h5 class="text-xs font-semibold text-gray-600">Erotuomarin aiemmat ottelut joukkueelle ${targetTeamName}:</h5><ul class="list-none pl-0 text-xs text-gray-500">`;
                 games.forEach(pastGame => {
@@ -260,7 +239,6 @@ function displayMatchInfo(match, groupDataForMatchInfo, lineupGoalsA = 0, lineup
         };
         refereePastGamesHtml += `<div class="grid grid-cols-1 md:grid-cols-2 gap-x-4 text-center">${getRefereeGamesList(teamAId, teamAName)}${getRefereeGamesList(teamBId, teamBName)}</div>`;
     }
-
     if (container) {
         container.innerHTML = `
             <h2 class="text-2xl font-semibold text-gray-700 mb-2 text-center">${teamAName} vs ${teamBName}</h2>
@@ -276,18 +254,16 @@ function displayMatchInfo(match, groupDataForMatchInfo, lineupGoalsA = 0, lineup
 }
 
 function displayGroupInfoAndStandings(group, currentMatchTeamAId, currentMatchTeamBId, container) {
+    // ... (sisältö ennallaan) ...
     if (!container) return;
-
     if (!group || !group.teams || group.teams.length === 0) {
         container.innerHTML = '<p class="text-gray-700 text-center">Sarjataulukkoa ei löytynyt tälle lohkolle.</p>';
         container.classList.remove('hidden');
         return;
     }
-
     const groupName = group.group_name || 'Lohko';
     const categoryName = group.category_name || 'Sarja';
     const competitionName = group.competition_name || '';
-
     let tableHtml = `
         <h3 class="text-xl font-semibold text-gray-700 mb-1 text-center">${categoryName} - ${groupName}</h3>
         <p class="text-sm text-gray-500 text-center mb-4">(${competitionName})</p>
@@ -298,9 +274,7 @@ function displayGroupInfoAndStandings(group, currentMatchTeamAId, currentMatchTe
                     <th class="number-col">O</th><th class="number-col">V</th><th class="number-col">T</th><th class="number-col">H</th>
                     <th class="number-col">TM</th><th class="number-col">PM</th><th class="number-col">ME</th><th class="number-col">P</th>
                 </tr></thead><tbody>`;
-
     const sortedTeams = [...group.teams].sort((a, b) => (parseInt(a.current_standing) || 999) - (parseInt(b.current_standing) || 999));
-
     sortedTeams.forEach(team => {
         const isCurrentTeam = team.team_id === currentMatchTeamAId || team.team_id === currentMatchTeamBId;
         tableHtml += `
@@ -313,33 +287,27 @@ function displayGroupInfoAndStandings(group, currentMatchTeamAId, currentMatchTe
                 <td class="number-col">${team.goals_diff || 0}</td><td class="number-col"><strong>${team.points || 0}</strong></td>
             </tr>`;
     });
-
     tableHtml += `</tbody></table></div>`;
     container.innerHTML = tableHtml;
     container.classList.remove('hidden');
 }
 
 async function processAndDisplayPlayerStats(playersInMatch, matchDetails, groupDataForInfo, playerStatsContainerGlobal, matchInfoContainerGlobal) {
+    // ... (sisältö ennallaan) ...
     const teamAName = matchDetails.team_A_name || 'Kotijoukkue';
     const teamBName = matchDetails.team_B_name || 'Vierasjoukkue';
-
     if (!playerStatsContainerGlobal) return { lineupPlayerIds: [], teamAName, teamBName };
-
     if (!playersInMatch || playersInMatch.length === 0) {
         playerStatsContainerGlobal.innerHTML = '<p class="text-gray-700 text-center">Ottelulle ei löytynyt pelaajatietoja kokoonpanosta.</p>';
         displayMatchInfo(matchDetails, groupDataForInfo, 0, 0, matchInfoContainerGlobal);
         return { lineupPlayerIds: [], teamAName, teamBName };
     }
-
     const playerPromises = playersInMatch.map(playerLineupInfo =>
         fetchAndProcessPlayerData(playerLineupInfo.player_id, playerLineupInfo.team_id, matchDetails, playerLineupInfo)
     );
-
     const allPlayerStats = (await Promise.all(playerPromises)).filter(stats => stats !== null);
-
     let totalLineupGoalsTeamA = 0;
     let totalLineupGoalsTeamB = 0;
-
     allPlayerStats.forEach(player => {
         if (player.teamIdInMatch === matchDetails.team_A_id) {
             totalLineupGoalsTeamA += (player.goalsForThisSpecificTeamInSeason || 0);
@@ -347,9 +315,7 @@ async function processAndDisplayPlayerStats(playersInMatch, matchDetails, groupD
             totalLineupGoalsTeamB += (player.goalsForThisSpecificTeamInSeason || 0);
         }
     });
-
     displayMatchInfo(matchDetails, groupDataForInfo, totalLineupGoalsTeamA, totalLineupGoalsTeamB, matchInfoContainerGlobal);
-
     allPlayerStats.sort((a, b) => {
         const getTeamSortOrder = (teamId) => (teamId === matchDetails.team_A_id ? 1 : (teamId === matchDetails.team_B_id ? 2 : 3));
         const teamOrderA = getTeamSortOrder(a.teamIdInMatch);
@@ -362,7 +328,6 @@ async function processAndDisplayPlayerStats(playersInMatch, matchDetails, groupD
         if (!isNaN(numB)) return 1;
         return a.name.localeCompare(b.name);
     });
-
     if (allPlayerStats.length === 0) {
         playerStatsContainerGlobal.innerHTML = '<p class="text-gray-700 text-center">Pelaajien tilastojen haku epäonnistui kaikille kokoonpanon pelaajille.</p>';
     } else {
@@ -389,30 +354,24 @@ function displayPlayerStats(stats, container) {
 }
 
 async function displayPlayersNotInLineup(teamDetails, matchLineupPlayerIds, teamDisplayName, originalMatchDetails, container) {
+    // ... (sisältö ennallaan) ...
     if (!container) return;
-
     if (!teamDetails || !teamDetails.players || teamDetails.players.length === 0) {
         return;
     }
-
     const playersNotInMatch = teamDetails.players.filter(player =>
         player.player_id && !matchLineupPlayerIds.includes(player.player_id.toString()) && player.inactive !== "1"
     );
-
     if (playersNotInMatch.length > 0) {
         const sectionDiv = document.createElement('div');
         sectionDiv.className = 'mt-8 p-6 bg-gray-100 rounded-lg shadow-inner';
-
         const header = document.createElement('h3');
         header.className = 'text-xl font-semibold text-gray-800 mb-4 border-b pb-2';
         header.textContent = `Muut joukkueen pelaajat (${teamDisplayName})`;
         sectionDiv.appendChild(header);
-
         const cardsContainer = document.createElement('div');
         cardsContainer.className = 'space-y-6';
-
         playersNotInMatch.sort((a,b) => (a.last_name || '').localeCompare(b.last_name || '') || (a.first_name || '').localeCompare(b.first_name || ''));
-
         const playerStatPromises = playersNotInMatch.map(async (playerFromTeam) => {
             const playerLineupInfo = {
                 player_id: playerFromTeam.player_id,
@@ -424,9 +383,7 @@ async function displayPlayersNotInLineup(teamDetails, matchLineupPlayerIds, team
             };
             return fetchAndProcessPlayerData(playerFromTeam.player_id, teamDetails.team_id, originalMatchDetails, playerLineupInfo);
         });
-
         const resolvedPlayerStatsArray = (await Promise.all(playerStatPromises)).filter(stats => stats !== null);
-
         if (resolvedPlayerStatsArray.length > 0) {
             resolvedPlayerStatsArray.forEach(stats => {
                 displayPlayerStats(stats, cardsContainer);
@@ -443,24 +400,34 @@ async function displayPlayersNotInLineup(teamDetails, matchLineupPlayerIds, team
 }
 
 /**
- * UUSI FUNKTIO
+ * PÄIVITETTY FUNKTIO
  * Displays a team's upcoming and past matches as clickable links.
- * @param {Object} teamDetails - The team object from the API, including team_name and matches array.
+ * @param {Object} teamDetails - The team object from the API, must include team_id, team_name, and matches array.
  * @param {HTMLElement} container - The DOM element to render the schedule into.
  */
 function displayTeamSchedule(teamDetails, container) {
-    const matches = teamDetails.matches || [];
+    const allGroupMatches = teamDetails.matches || [];
+    const teamIdToFilterBy = teamDetails.team_id;
 
-    // Suodatetaan ja lajitellaan ottelut
-    const upcomingMatches = matches
+    if (!teamIdToFilterBy) {
+        console.error("displayTeamSchedule called without a team_id. Cannot filter matches.");
+        return;
+    }
+
+    // Suodatetaan vain ne ottelut, joissa joukkue on osallisena
+    const teamSpecificMatches = allGroupMatches.filter(m =>
+        m.team_A_id === teamIdToFilterBy || m.team_B_id === teamIdToFilterBy
+    );
+
+    // Lajitellaan suodatetut ottelut
+    const upcomingMatches = teamSpecificMatches
         .filter(m => m.status === 'Fixture')
         .sort((a, b) => new Date(a.date) - new Date(b.date));
 
-    const pastMatches = matches
+    const pastMatches = teamSpecificMatches
         .filter(m => m.status === 'Played')
         .sort((a, b) => new Date(b.date) - new Date(a.date));
 
-    // Aputoiminto linkin luomiseen
     const createMatchLinkHTML = (match) => {
         let textContent = `${match.date}: ${match.team_A_name} vs ${match.team_B_name}`;
         if (match.status === 'Played' && match.fs_A !== undefined && match.fs_B !== undefined) {
@@ -471,7 +438,6 @@ function displayTeamSchedule(teamDetails, container) {
                 </a>`;
     };
 
-    // Luodaan lopullinen HTML
     const scheduleHTML = `
         <div class="p-4 sm:p-6 bg-white rounded-lg shadow-md">
             <h2 class="text-2xl sm:text-3xl font-bold text-gray-800 mb-4 text-center">${teamDetails.team_name} - Otteluohjelma</h2>
@@ -499,12 +465,9 @@ function displayTeamSchedule(teamDetails, container) {
     `;
 
     if (container) {
-        // Tyhjennetään muut näkymät, joita ei tarvita tässä
         document.getElementById('matchInfo').innerHTML = '';
         document.getElementById('groupInfoContainer').innerHTML = '';
         document.getElementById('playerStatsContainer').innerHTML = '';
-
-        // Näytetään otteluohjelma
         container.innerHTML = scheduleHTML;
         container.classList.remove('hidden');
     }
