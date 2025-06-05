@@ -27,9 +27,6 @@ if (typeof window !== 'undefined' && typeof document !== 'undefined') {
 
 // --- Main Application Logic ---
 
-/**
- * Main function to orchestrate fetching and displaying all data for a MATCH.
- */
 async function loadMatchData() {
     if (!matchIdInput) {
         console.error("matchIdInput is not initialized.");
@@ -79,10 +76,6 @@ async function loadMatchData() {
     }
 }
 
-/**
- * Main function to orchestrate fetching and displaying schedule data for a TEAM.
- * @param {string} teamId The ID of the team to fetch schedule for.
- */
 async function loadTeamSchedule(teamId) {
     clearPreviousData();
     showLoading(true);
@@ -120,7 +113,9 @@ async function loadTeamSchedule(teamId) {
             console.warn("Lohko löytyi, mutta se ei sisällä otteluita.");
         }
 
+        // Välitetään teamId display-funktiolle suodatusta varten
         displayTeamSchedule({
+            team_id: teamId,
             team_name: teamDetails.team_name,
             matches: groupData.matches || []
         }, playersNotInLineupContainer);
@@ -142,10 +137,8 @@ if (typeof window !== 'undefined' && typeof document !== 'undefined') {
     }
 
     document.addEventListener('DOMContentLoaded', () => {
-        // KORJATTU OSUUS: Käsitellään URL-parametrit merkkikoosta riippumatta
         const originalParams = new URLSearchParams(window.location.search);
         const params = new URLSearchParams();
-        // Muutetaan kaikki avaimet pieniksi kirjaimiksi
         for (const [key, value] of originalParams.entries()) {
             params.append(key.toLowerCase(), value);
         }
