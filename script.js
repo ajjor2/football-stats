@@ -80,7 +80,6 @@ async function loadMatchData() {
 }
 
 /**
- * KORJATTU FUNKTIO
  * Main function to orchestrate fetching and displaying schedule data for a TEAM.
  * @param {string} teamId The ID of the team to fetch schedule for.
  */
@@ -90,9 +89,7 @@ async function loadTeamSchedule(teamId) {
     displayError("");
 
     try {
-        // Vaihe 1: Hae joukkueen tiedot
         const teamApiResponse = await fetchTeamData(teamId);
-        // Turvallinen tarkistus, ettei yritetä lukea null-arvoa
         if (!teamApiResponse || !teamApiResponse.team) {
             throw new Error("Joukkueen tietoja ei voitu hakea tai vastaus oli virheellinen.");
         }
@@ -102,7 +99,6 @@ async function loadTeamSchedule(teamId) {
             throw new Error("Joukkueelle ei löytynyt sarjoja tai lohkoja.");
         }
 
-        // Vaihe 2: Etsi kuluvan kauden aktiivinen lohko
         const currentYear = config.CURRENT_YEAR;
         const currentGroupInfo = teamDetails.groups.find(g => g.competition_season === currentYear && g.group_current === "1");
 
@@ -110,27 +106,23 @@ async function loadTeamSchedule(teamId) {
             throw new Error(`Joukkueelle ei löytynyt aktiivista ryhmää kaudelle ${currentYear}.`);
         }
         
-        // Vaihe 3: Hae lohkon tiedot, jotka sisältävät ottelut
         const groupData = await fetchGroupDetails({
             competition_id: currentGroupInfo.competition_id,
             category_id: currentGroupInfo.category_id,
             group_id: currentGroupInfo.group_id
         });
 
-        // Turvallinen tarkistus, fetchGroupDetails palauttaa null epäonnistuessaan
         if (!groupData) {
              throw new Error("Lohkon tietoja ei voitu hakea.");
         }
         
-        // Varoitetaan, jos lohko löytyy, mutta otteluita ei ole, mutta ei heitetä virhettä
         if (!groupData.matches) {
             console.warn("Lohko löytyi, mutta se ei sisällä otteluita.");
         }
 
-        // Vaihe 4: Näytä otteluohjelma
         displayTeamSchedule({
             team_name: teamDetails.team_name,
-            matches: groupData.matches || [] // Varmistetaan, että välitetään aina taulukko
+            matches: groupData.matches || []
         }, playersNotInLineupContainer);
 
     } catch (error) {
@@ -150,9 +142,16 @@ if (typeof window !== 'undefined' && typeof document !== 'undefined') {
     }
 
     document.addEventListener('DOMContentLoaded', () => {
-        const queryParams = new URLSearchParams(window.location.search);
-        const matchIdFromQuery = queryParams.get('matchid'); 
-        const teamIdFromQuery = queryParams.get('teamid');
+        // KORJATTU OSUUS: Käsitellään URL-parametrit merkkikoosta riippumatta
+        const originalParams = new URLSearchParams(window.location.search);
+        const params = new URLSearchParams();
+        // Muutetaan kaikki avaimet pieniksi kirjaimiksi
+        for (const [key, value] of originalParams.entries()) {
+            params.append(key.toLowerCase(), value);
+        }
+
+        const matchIdFromQuery = params.get('matchid'); 
+        const teamIdFromQuery = params.get('teamid');
 
         if (matchIdFromQuery) {
             if (matchIdInput) {
