@@ -6,7 +6,8 @@ import { processPlayerMatchHistory } from './js/dataProcessor.js'; // Re-exporte
 import { 
     displayGroupInfoAndStandings, 
     processAndDisplayPlayerStats, 
-    displayPlayersNotInLineup 
+    displayPlayersNotInLineup,
+    displayTeamSchedule // UUSI IMPORTTI
 } from './js/uiManager.js';
 
 // DOM Element Constants - Initialize only in browser environment
@@ -27,13 +28,11 @@ if (typeof window !== 'undefined' && typeof document !== 'undefined') {
 // --- Main Application Logic ---
 
 /**
- * Main function to orchestrate fetching and displaying all data.
+ * Main function to orchestrate fetching and displaying all data for a MATCH.
  */
 async function loadMatchData() {
     if (!matchIdInput) {
         console.error("matchIdInput is not initialized.");
-        // displayError might not be available if utils.js itself had an issue or DOM not ready.
-        // So, also log to console.
         console.error("Syötä ottelun ID. (Application initialization error)"); 
         if (typeof displayError === 'function') displayError("Sovelluksen alustusvirhe. Tarkista konsoli.");
         return;
@@ -44,7 +43,6 @@ async function loadMatchData() {
         return;
     }
 
-    // Ensure utils functions are available
     if (typeof clearPreviousData !== 'function' || typeof showLoading !== 'function' || typeof displayError !== 'function') {
         console.error("Core utility functions are not loaded. Cannot proceed.");
         return;
@@ -57,8 +55,7 @@ async function loadMatchData() {
     try {
         const matchDetails = await fetchMatchDetails(matchId);
         if (!matchDetails) {
-            // displayError would have been called by fetchMatchDetails in apiService.js
-            showLoading(false); // Ensure loading is hidden
+            showLoading(false); 
             return;
         }
 
@@ -97,6 +94,34 @@ async function loadMatchData() {
     }
 }
 
+/**
+ * UUSI FUNKTIO
+ * Main function to orchestrate fetching and displaying schedule data for a TEAM.
+ * @param {string} teamId The ID of the team to fetch schedule for.
+ */
+async function loadTeamSchedule(teamId) {
+    clearPreviousData();
+    showLoading(true);
+    displayError("");
+
+    try {
+        const teamData = await fetchTeamData(teamId);
+
+        if (teamData && teamData.team && teamData.team.matches) {
+            // Käytetään playersNotInLineupContainer-elementtiä joukkueen otteluohjelman näyttämiseen.
+            displayTeamSchedule(teamData.team, playersNotInLineupContainer);
+        } else {
+            displayError(`Joukkueen (ID: ${teamId}) tietoja tai otteluita ei löytynyt.`);
+        }
+
+    } catch (error) {
+        console.error(`Virhe haettaessa joukkueen ${teamId} tietoja:`, error);
+        displayError(`Virhe haettaessa joukkueen ${teamId} tietoja: ${error.message}`);
+    } finally {
+        showLoading(false);
+    }
+}
+
 // --- Event Listeners ---
 if (typeof window !== 'undefined' && typeof document !== 'undefined') {
     if(fetchDataButton) { 
@@ -108,6 +133,7 @@ if (typeof window !== 'undefined' && typeof document !== 'undefined') {
     document.addEventListener('DOMContentLoaded', () => {
         const queryParams = new URLSearchParams(window.location.search);
         const matchIdFromQuery = queryParams.get('matchid'); 
+        const teamIdFromQuery = queryParams.get('teamid'); // LISÄTTY
 
         if (matchIdFromQuery) {
             if (matchIdInput) {
@@ -120,13 +146,15 @@ if (typeof window !== 'undefined' && typeof document !== 'undefined') {
             } else {
                  console.error("Match ID Input not found on DOMContentLoaded for query param.");
             }
+        } else if (teamIdFromQuery) { // LISÄTTY EHTOLAUSE
+            if (typeof loadTeamSchedule === 'function') {
+                loadTeamSchedule(teamIdFromQuery);
+            } else {
+                console.error("loadTeamSchedule function not available on DOMContentLoaded for query param.");
+            }
         }
     });
 }
 
 // Re-exporting for testing purposes or other consumers
 export { processPlayerMatchHistory, config };
-
-// Export the main function if it needs to be callable from elsewhere (e.g. inline script in HTML)
-// For now, it's primarily triggered by event listeners.
-// export { loadMatchData };
