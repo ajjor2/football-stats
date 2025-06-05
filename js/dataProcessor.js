@@ -16,6 +16,7 @@ function processPlayerMatchHistory(matches, currentSeasonId, previousSeasonId, t
     const stats = {
         gamesPlayedThisYear: 0, goalsThisYear: 0, warningsThisYear: 0, suspensionsThisYear: 0,
         goalsByTeamThisYear: {}, gamesByTeamThisYear: {},
+        lastPlayedDateByTeam: {}, // Added: To store last played date for each team this year
         goalsForThisSpecificTeamInSeason: 0, pastMatchesDetails: [],
         gamesPlayedLastSeason: 0, goalsScoredLastSeason: 0
     };
@@ -42,6 +43,11 @@ function processPlayerMatchHistory(matches, currentSeasonId, previousSeasonId, t
             const displayKey = `${teamNameForGame} (${leagueName})`;
 
             stats.gamesByTeamThisYear[displayKey] = (stats.gamesByTeamThisYear[displayKey] || 0) + 1;
+
+            // Added: Update last played date for the team
+            if (!stats.lastPlayedDateByTeam[displayKey] || pastMatch.date > stats.lastPlayedDateByTeam[displayKey]) {
+                stats.lastPlayedDateByTeam[displayKey] = pastMatch.date;
+            }
 
             const playerGoals = parseInt(pastMatch.player_goals) || 0;
             stats.goalsThisYear += playerGoals;
@@ -76,11 +82,11 @@ function processPlayerMatchHistory(matches, currentSeasonId, previousSeasonId, t
                 else if (pastMatch.winner_id && pastMatch.winner_id !== '-' && pastMatch.winner_id !== '0') {
                     if (pastMatch.winner_id === playerTeamId) resultIndicator = 'win';
                     else if (opponentTeamId && pastMatch.winner_id === opponentTeamId) resultIndicator = 'loss';
-                    else resultIndicator = 'draw';
+                    else resultIndicator = 'draw'; // Fallback if winner_id is unexpected
                 } else { 
                     const pScore = parseInt(playerTeamScore); const oScore = parseInt(opponentScore);
                     if (!isNaN(pScore) && !isNaN(oScore)) resultIndicator = pScore > oScore ? 'win' : (pScore < oScore ? 'loss' : 'draw');
-                    else resultIndicator = 'draw';
+                    else resultIndicator = 'draw'; // Fallback if scores are not parseable
                 }
                 stats.pastMatchesDetails.push({
                     date: pastMatch.date, opponentName: opponentName || 'N/A', playerTeamScore, opponentScore,
@@ -109,6 +115,7 @@ async function fetchAndProcessPlayerData(playerId, teamIdInMatch, fullMatchData,
         shirtNumber: playerLineupInfoFromMatch.shirt_number || 'N/A',
         birthYear: 'N/A', teamsThisYear: 'Ei voitu hakea', gamesPlayedThisYear: 0,
         gamesByTeamThisYear: {}, goalsThisYear: 0, goalsByTeamThisYear: {},
+        lastPlayedDateByTeam: {}, // Added: Ensure it's part of default and returned stats
         goalsForThisSpecificTeamInSeason: 0, pastMatchesDetails: [], gamesPlayedLastSeason: 0,
         goalsScoredLastSeason: 0, warningsThisYear: 0, suspensionsThisYear: 0,
         position_fi: null, nationality: null, img_url: null, height: null, weight: null,
@@ -138,7 +145,6 @@ async function fetchAndProcessPlayerData(playerId, teamIdInMatch, fullMatchData,
                                     : (teamIdInMatch === fullMatchData.team_B_id ? fullMatchData.team_B_name : 
                                        (playerLineupInfoFromMatch && playerLineupInfoFromMatch.team_name_from_getTeam ? playerLineupInfoFromMatch.team_name_from_getTeam : null));
 
-        // UUSI: Luo teamId -> primary_category.category_name mappaus
         const teamIdToPrimaryCategoryNameMap = {};
         if (playerDataFromAPI.teams && Array.isArray(playerDataFromAPI.teams)) {
             playerDataFromAPI.teams.forEach(teamEntry => {
@@ -152,22 +158,20 @@ async function fetchAndProcessPlayerData(playerId, teamIdInMatch, fullMatchData,
             });
         }
         
-        // Välitä uusi kartta processPlayerMatchHistory-funktiolle
         const seasonStats = processPlayerMatchHistory(
             playerDataFromAPI.matches, 
             config.CURRENT_YEAR, 
             config.PREVIOUS_YEAR, 
             teamNameForThisContext,
-            teamIdToPrimaryCategoryNameMap // Uusi parametri
+            teamIdToPrimaryCategoryNameMap
         );
         
-        let teamsThisYear = []; // Tämä logiikka pysyy samana "Joukkueet (2025)"-osiolle
+        let teamsThisYear = []; 
         if (playerDataFromAPI.teams && Array.isArray(playerDataFromAPI.teams)) {
              playerDataFromAPI.teams.forEach(teamEntry => {
                 if (teamEntry.primary_category && 
                     ( (teamEntry.primary_category.competition_id && teamEntry.primary_category.competition_id.toLowerCase().includes(config.CURRENT_YEAR.substring(2))) || 
                       (teamEntry.primary_category.competition_name && teamEntry.primary_category.competition_name.includes(config.CURRENT_YEAR)) )) {
-                    // Käytetään category_name tähän listaukseen, kuten aiemmin
                     teamsThisYear.push(`${teamEntry.team_name} (${teamEntry.primary_category.category_name || 'Sarja tuntematon'})`);
                 }
              });
@@ -182,7 +186,7 @@ async function fetchAndProcessPlayerData(playerId, teamIdInMatch, fullMatchData,
         return { 
             ...defaultPlayerInfo,
             name: playerName, shirtNumber: shirtNumber, birthYear: playerDataFromAPI.birthyear || 'N/A',
-            ...seasonStats, // Sisältää nyt päivitetyn goalsByTeamThisYear ja gamesByTeamThisYear
+            ...seasonStats, // This will now include lastPlayedDateByTeam
             teamsThisYear: teamsThisYear.join('<br>'),
             position_fi: playerDataFromAPI.position_fi, nationality: playerDataFromAPI.nationality,
             img_url: playerDataFromAPI.img_url, height: playerDataFromAPI.height, weight: playerDataFromAPI.weight,
