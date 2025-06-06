@@ -1,0 +1,64 @@
+name: Test AI Model Connection
+
+on:
+  workflow_dispatch:
+
+permissions:
+  models: read
+
+jobs:
+  run-ai-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Test AI Model Call
+        uses: actions/github-script@v7
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_PAT_MODELS }}
+        with:
+          script: |
+            console.log("Starting AI Model Connection Test...");
+
+            const token = process.env.GITHUB_TOKEN;
+            if (!token) {
+              core.setFailed("Error: GITHUB_TOKEN (GH_PAT_MODELS secret) is not set. Please ensure the secret is correctly configured.");
+              return;
+            }
+            console.log("GITHUB_TOKEN environment variable is set.");
+
+            const modelName = 'openai/gpt-4o'; // Placeholder model
+            const prompt = "Tell me a short, funny story about football.";
+            const bodyPayload = {
+              messages: [{ role: "user", content: prompt }],
+              model: modelName,
+              max_tokens: 150,
+              temperature: 0.7,
+            };
+
+            console.log(`Sending prompt to model: ${modelName}`);
+            console.log("Prompt:", prompt);
+
+            try {
+              const response = await github.request("POST /models/{modelName}/chat", {
+                modelName: modelName,
+                data: bodyPayload,
+                headers: {
+                  "Authorization": `Bearer ${token}`,
+                  "Content-Type": "application/json",
+                }
+              });
+
+              if (response.status === 200 && response.data && response.data.choices && response.data.choices.length > 0 && response.data.choices[0].message) {
+                console.log("--- AI Model Response ---");
+                console.log(response.data.choices[0].message.content);
+                console.log("-------------------------");
+                // For deeper inspection if needed:
+                // console.log("Full AI Response Object:", JSON.stringify(response.data, null, 2));
+              } else {
+                core.setFailed(`Error: AI response was not successful or data structure is unexpected. Status: ${response.status}. Response data: ${JSON.stringify(response.data)}`);
+              }
+            } catch (error) {
+              core.setFailed(`Error during AI model call: ${error.message}. Full error: ${JSON.stringify(error, null, 2)}`);
+              if (error.response) {
+                core.error(`Error details from AI service: Status ${error.response.status}, Data: ${JSON.stringify(error.response.data, null, 2)}`);
+              }
+            }

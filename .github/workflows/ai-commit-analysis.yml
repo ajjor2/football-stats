@@ -1,0 +1,130 @@
+name: Generate AI Match Summary and Commit
+
+on:
+  workflow_dispatch:
+    inputs:
+      match_id:
+        description: 'Football Match ID for which to generate and commit summary'
+        required: true
+        type: string
+
+permissions:
+  models: read
+  contents: write # Required to push changes back to the repository
+
+jobs:
+  generate_commit_summary:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm install # Maintained for general project consistency or future use
+
+      - name: Call AI Model for Match Summary
+        id: ai_call
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_PAT_MODELS }}
+          MATCH_ID_INPUT: ${{ inputs.match_id }} # Pass match_id to env for script
+        uses: actions/github-script@v7
+        with:
+          script: |
+            console.log(`Starting AI Model Call for Match ID: ${process.env.MATCH_ID_INPUT}`);
+
+            const token = process.env.GITHUB_TOKEN;
+            if (!token) {
+              core.setFailed("Error: GITHUB_TOKEN (GH_PAT_MODELS secret) is not set.");
+              return;
+            }
+
+            const matchId = process.env.MATCH_ID_INPUT;
+            if (!matchId) {
+              core.setFailed("Error: MATCH_ID_INPUT is not set.");
+              return;
+            }
+
+            // Here you might typically fetch actual match data using the matchId
+            // For this example, we'll construct a prompt directly with the ID.
+            // If you had a script to fetch data (like the previously discussed generate-summary-with-sdk.js),
+            // you might call it here, or replicate its data fetching logic if simple enough.
+            // For now, as per task description, using a dynamic prompt directly.
+
+            const modelName = 'openai/gpt-4o'; // Placeholder model
+            const promptContent = `Write a short, engaging summary of the football match with ID ${matchId}. Focus on key highlights and the final score.`;
+
+            const bodyPayload = {
+              messages: [{ role: "user", content: promptContent }],
+              model: modelName,
+              max_tokens: 250, // Adjusted for a summary
+              temperature: 0.7,
+            };
+
+            console.log(`Sending prompt to model: ${modelName}`);
+            console.log("Prompt:", promptContent);
+
+            try {
+              const response = await github.request("POST /models/{modelName}/chat", {
+                modelName: modelName,
+                data: bodyPayload,
+                headers: {
+                  "Authorization": `Bearer ${token}`,
+                  "Content-Type": "application/json",
+                }
+              });
+
+              if (response.status === 200 && response.data && response.data.choices && response.data.choices.length > 0 && response.data.choices[0].message) {
+                const summary = response.data.choices[0].message.content;
+                console.log("--- AI Model Response ---");
+                console.log(summary);
+                console.log("-------------------------");
+                core.setOutput("summary", summary);
+              } else {
+                core.setFailed(`Error: AI response was not successful or data structure is unexpected. Status: ${response.status}. Data: ${JSON.stringify(response.data)}`);
+              }
+            } catch (error) {
+              core.setFailed(`Error during AI model call: ${error.message}. Full error: ${JSON.stringify(error, null, 2)}`);
+               if (error.response) {
+                core.error(`Error details from AI service: Status ${error.response.status}, Data: ${JSON.stringify(error.response.data, null, 2)}`);
+              }
+            }
+
+      - name: Commit analysis file
+        run: |
+          AI_SUMMARY="${{ steps.ai_call.outputs.summary }}"
+          if [ -z "$AI_SUMMARY" ]; then
+            echo "AI summary is empty. Skipping commit."
+            exit 0 # Exit successfully, but do nothing
+          fi
+
+          MATCH_ID="${{ inputs.match_id }}"
+          FILE_PATH="analyses/MATCH_${MATCH_ID}.txt" # Added MATCH_ prefix for clarity
+
+          mkdir -p analyses
+          echo "$AI_SUMMARY" > "$FILE_PATH"
+          echo "AI Summary saved to $FILE_PATH"
+
+          git config --global user.name 'github-actions[bot]'
+          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+
+          # Check if there are changes to commit
+          if git diff --quiet "$FILE_PATH"; then
+            echo "No changes to commit for $FILE_PATH."
+            exit 0
+          fi
+
+          git add "$FILE_PATH"
+          git commit -m "Add AI analysis for match $MATCH_ID
+
+Generated by GitHub Actions workflow."
+          echo "Committing $FILE_PATH"
+          git push
+          echo "Pushed $FILE_PATH to repository."
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # Use the default GITHUB_TOKEN for git operations if permitted by repo settings for actions

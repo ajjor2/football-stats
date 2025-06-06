@@ -1,0 +1,45 @@
+name: AI Match Summary Analysis
+
+on:
+  workflow_dispatch:
+    inputs:
+      match_id:
+        description: 'Football Match ID to analyze'
+        required: true
+        type: string
+
+jobs:
+  generate_ai_summary:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+          cache: 'npm' # Cache npm dependencies
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Run AI Summary Script
+        id: ai_summary_script
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_PAT_MODELS }}
+        run: |
+          echo "Running script with match_id: ${{ inputs.match_id }}"
+          node scripts/generate-summary-with-sdk.js ${{ inputs.match_id }} > summary_output.txt
+          echo "Script execution finished."
+          echo "--- Script Output (summary_output.txt) ---"
+          cat summary_output.txt
+          echo "--- End of Script Output ---"
+          # Store the output in a step output variable
+          echo "summary=$(cat summary_output.txt)" >> $GITHUB_OUTPUT
+
+      - name: Print AI Summary
+        run: |
+          echo "AI Generated Summary:"
+          echo "${{ steps.ai_summary_script.outputs.summary }}"

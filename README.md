@@ -5,16 +5,40 @@ The Football Player Statistics Viewer is a web application designed to display d
 
 Recent development has focused on refactoring the codebase for better modularity by separating HTML, CSS, and JavaScript, improving code readability, and implementing both unit tests (Jest) and UI tests (Puppeteer) with automated CI/CD workflows to ensure higher code quality and maintainability. These tests verify both individual functions and the overall application behavior from a user's perspective.
 
-## How to Use
-1.  Open the `footballstats.html` file in a web browser.
-2.  Find a valid **Match ID** from the Suomen Palloliiton tulospalvelu (Finnish Football Association's results service). An example ID might be `3760372`.
-3.  Enter the Match ID into the input field labeled "Syötä Match ID".
-4.  Click the "Hae Tiedot" (Fetch Data) button.
-5.  The application will then display:
+## Installation and Running the Application
+
+To get the Football Player Statistics Viewer up and running on your local machine, follow these steps:
+
+1.  **Clone the repository:**
+    ```bash
+    git clone https://github.com/ajjor2/football-stats.git
+    cd football-stats
+    ```
+2.  **Install dependencies:**
+    This command will install all necessary dependencies for the application, including those required for development and testing, as defined in `package.json`.
+    ```bash
+    npm install
+    ```
+3.  **Start the application:**
+    This command will typically start a local development server (if configured in `package.json`'s scripts) or open the application in your default browser.
+    ```bash
+    npm start
+    ```
+    *(Note: If `npm start` is not configured, you might need to open the `footballstats.html` file directly in your browser after installing dependencies.)*
+
+Once the application is running (or `footballstats.html` is opened):
+
+1.  Find a valid **Match ID** from the Suomen Palloliiton tulospalvelu (Finnish Football Association's results service). An example ID might be `3760372`.
+2.  Enter the Match ID into the input field labeled "Syötä Match ID".
+3.  Click the "Hae Tiedot" (Fetch Data) button.
+4.  The application will then display:
     *   Basic match information (teams, score, date, competition).
     *   Group standings if available.
     *   Detailed statistics for each player in the match lineup.
     *   A list of other players in the involved teams who were not in the specific match's lineup.
+
+## How to Use
+After installation, follow the steps above starting from finding a Match ID.
 
 ## Project Structure
 The project is organized as follows:
@@ -34,19 +58,9 @@ The project is organized as follows:
     *   `ci.yml`: Defines the Continuous Integration workflow, which automatically runs both unit and UI tests on pushes and pull requests to the `main` branch.
 
 ## Running Tests
-To run tests locally, you need Node.js and npm installed.
+To run tests locally, ensure Node.js and npm are installed and you have already run `npm install` as described in the "Installation" section.
 
-1.  **Clone the repository:**
-    ```bash
-    git clone https://github.com/ajjor2/football-stats.git
-    cd football-stats
-    ```
-2.  **Install dependencies:**
-    This command will install Jest, Puppeteer, and any other development dependencies listed in `package.json`.
-    ```bash
-    npm install
-    ```
-3.  **Run Unit Tests:**
+1.  **Run Unit Tests:**
     This command executes the Jest unit tests for the JavaScript logic.
     ```bash
     npm test
