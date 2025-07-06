@@ -6,7 +6,7 @@ import { processPlayerMatchHistory } from './js/dataProcessor.js';
 import { 
     displayGroupInfoAndStandings, 
     processAndDisplayPlayerStats, 
-    displayPlayersNotInLineup,
+    displayPlayersNotInLineup, 
     displayTeamSchedule
 } from './js/uiManager.js';
 
@@ -53,6 +53,7 @@ async function loadMatchData() {
         if (groupDataForInfo && typeof displayGroupInfoAndStandings === 'function') {
             displayGroupInfoAndStandings(groupDataForInfo, matchDetails.team_A_id, matchDetails.team_B_id, groupInfoContainer);
         }
+        // Re-enabling these calls to display players not in lineup
         const [teamAData, teamBData] = await Promise.all([
             fetchTeamData(matchDetails.team_A_id),
             fetchTeamData(matchDetails.team_B_id)
@@ -61,6 +62,7 @@ async function loadMatchData() {
             const { lineupPlayerIds, teamAName, teamBName } = await processAndDisplayPlayerStats(
                 matchDetails.lineups, matchDetails, groupDataForInfo, playerStatsContainer, matchInfoContainer 
             );
+            // Re-enabling these calls to display players not in lineup
             if (teamAData && teamAData.team && typeof displayPlayersNotInLineup === 'function') {
                 await displayPlayersNotInLineup(teamAData.team, lineupPlayerIds, teamAName, matchDetails, playersNotInLineupContainer);
             }
